@@ -37,9 +37,38 @@ A DWG holds lines on layers, not walls and rooms. The converter adds building in
   drawn in it becomes an opening in the wall, filled by an `IfcDoor` or `IfcWindow`. Closed shapes on column
   layers become `IfcColumn`. The original linework is kept alongside.
 
-Derived elements are an interpretation and are marked as such. Heights are assumed (walls and rooms 3 m, doors 2.1 m), because a plan
-does not give one. Recognition depends on layer and block naming, so a drawing with meaningless names
-produces drafting and generic objects only. Import into Revit has not been tested.
+Derived elements are an interpretation and are marked as such. Recognition depends on layer and block
+naming, so a drawing with meaningless names produces drafting and generic objects only. Import into Revit
+has not been tested.
+
+### Assumed sizes: read this before using the 3D model
+
+**Every vertical size of a derived element is an assumption, not data from the drawing.** A 2D plan shows
+where a wall is and how thick it is; nothing in it says how tall. To write a 3D element at all, the
+converter puts in fixed values:
+
+| Size | Where it comes from |
+|------|---------------------|
+| Wall length, position and thickness | measured from the drawing |
+| Door and window width | measured from the gap in the wall |
+| Room outline and floor area | measured from the drawing |
+| Column cross-section | measured from the drawing |
+| **Wall, room and column height** | **assumed: 3 m** |
+| **Door height** | **assumed: 2.1 m** |
+| **Window height and sill** | **assumed: 1.2 m high, 0.9 m above the floor** |
+| **Derived door and window thickness** | **assumed: 5 cm** (a placeholder slab in the opening) |
+| **Storey elevation** | **assumed: 0** |
+
+What this means in practice:
+
+- Do not take heights, volumes, wall areas or anything computed from them out of the IFC. Plan
+  quantities (lengths, thicknesses, floor areas) are real.
+- Each derived element says so in its properties: `DWG_Derived.Height` or `DWG_Room.Height` reads
+  "assumed ...". Elements converted from real 3D solids in the drawing are not affected; their sizes are
+  the drawing's.
+- The values are fixed in the code for now and cannot be set per request.
+- Some drawings do record a height, as the "thickness" of a line or the elevation it is drawn at. The
+  converter does not use either yet, so even those drawings get the assumed values.
 
 Model space goes into one storey: `IfcProject > IfcSite > IfcBuilding > IfcBuildingStorey`. A drawing
 with nothing in model space, such as a title block, is exported as its paper-space layouts instead,
