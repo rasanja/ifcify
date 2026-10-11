@@ -73,7 +73,8 @@ What this means in practice:
   the drawing's.
 - The values are fixed in the code for now and cannot be set per request.
 - Some drawings do record a height, as the "thickness" of a line or the elevation it is drawn at. The
-  converter does not use either yet, so even those drawings get the assumed values.
+  thickness is carried as a property but neither is used for the derived elements yet, so even those
+  drawings get the assumed values.
 
 ### What to trust in a flat 2D drawing
 
@@ -83,8 +84,20 @@ reading of the drawing rather than a fact in it.
 **Exact.** Positions and sizes of lines, arcs, circles, ellipses, polylines, points, splines with control
 points, solid fills, block placements (position, scale, rotation, mirroring), and text content and
 position. These are checked value for value against AutoCAD's own export of a test drawing, in each
-supported release. Layers, colours given as red-green-blue, line weights and linetype patterns are read
-directly from the file.
+supported release. Layers, colours, line weights and linetype patterns are read directly from the file;
+colours given as a palette number are looked up in AutoCAD's own colour table.
+
+**Stored by AutoCAD in the drawing, and carried over as stored.** Where a drawing holds a value, it is
+used rather than recomputed:
+
+- Field values. A drawing can keep a computed property next to an object, most often the area of a room
+  outline (`405 SF`). It is written as `StoredArea` on the room, as the text AutoCAD stored. The floor area
+  quantity is still measured from the outline, because the stored text is rounded; on the sample plan the
+  two agree for every room.
+- The measured size of multiline text.
+- The width of a wide polyline, when it is the same along its length.
+- The thickness (extrusion height) of a 2D entity, kept as a property. It is not yet used as a height.
+- A dimension's measurement.
 
 **Exact only if the drawing declares its unit.** Coordinates are written in the drawing's own unit. Real
 sizes, and floor areas in square metres, depend on which unit that is. A drawing that declares none is
@@ -96,19 +109,18 @@ every real-world size is wrong by the same factor.
 - Room footprints: an outline with arcs is written with the arcs broken into short straight pieces. The
   floor area reported for the room is computed from the true arcs and is exact.
 - Splines drawn through fit points are recomputed; end tangents and closed splines are not honoured.
-- Colours given as a palette number are converted by formula and were not checked against AutoCAD for
-  every number. "By block" colour and linetype take the layer's.
-- Text: the box around it is estimated from the character count, and fonts, width and alignment are not
-  carried over. Multiline text loses its inline formatting.
+- "By block" colour and linetype take the layer's. Palette colour 7, which AutoCAD shows white on a dark
+  screen and black on paper, is written black for linework and white on solids.
+- Text: single-line text stores no size, so the box around it is estimated from the character count.
+  Fonts, width factor and alignment are not carried over. Multiline text loses its inline formatting.
 - Dimensions saved without their drawn form are redrawn as plain lines and a number, without arrowheads
   and without the drawing's unit format (a length shows as `144`, not `12'-0"`).
 
 **Present in the drawing but not carried over.**
 
-- The width of wide polylines; they come out as thin lines.
+- The width of a polyline that tapers or changes width along its length; it comes out with no width.
 - Hatch patterns; a hatch becomes a plain fill of its boundary, and holes rely on the order of its loops.
 - Linetype scale, and shapes or text inside a linetype.
-- The "thickness" (extrusion height) of 2D entities.
 
 **A reading, not a fact.** The derived elements are found by rules, and a rule can pick the wrong lines:
 
