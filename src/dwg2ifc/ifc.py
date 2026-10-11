@@ -257,6 +257,7 @@ class _Builder:
             storey = ifcopenshell.api.root.create_entity(f, ifc_class="IfcBuildingStorey", name=space_name)
             ifcopenshell.api.aggregate.assign_object(f, products=[storey], relating_object=building)
             storey.ObjectPlacement = f.createIfcLocalPlacement(None, self.origin)
+            storey.Elevation = 0.0
             products = []
             for e in self.by_owner.get(handle, []):
                 items = self.items(e, ())
@@ -280,6 +281,7 @@ class _Builder:
             if handle == model_space:
                 self.spaces(storey, handle)
                 self.walls(storey, handle)
+                self.columns(storey, handle)
         for kind, occurrences in self.typed.items():
             f.createIfcRelDefinesByType(ifcopenshell.guid.new(), None, None, None, occurrences, kind)
         for (layer, kind, colour), described in self.described.items():
@@ -438,6 +440,50 @@ class _Builder:
             # the layer set is centred on the axis
             usage = f.createIfcMaterialLayerSetUsage(layers, "AXIS2", "POSITIVE", -thickness / 2, None)
             f.createIfcRelAssociatesMaterial(ifcopenshell.guid.new(), None, None, None, occurrences, usage)
+
+    def columns(self, storey, owner) -> None:
+        """Columns: closed shapes on column layers, extruded to the same assumed height as the walls."""
+        f = self.f
+        shift = self.origin_shift
+        wanted = lambda name: classify(name) == "IfcColumn" and is_plan(name)  # noqa: E731
+        made = []
+        # between 10 cm and 2 m across: smaller is a mark, larger is not a column
+        for shape in derive.footprints(self.d, owner, wanted, (0.1 / self.metres) ** 2, (2.0 / self.metres) ** 2):
+            if "radius" in shape:
+                cx, cy = shape["center"]
+                profile = f.createIfcCircleProfileDef("AREA", None, None, float(shape["radius"]))
+            else:
+                outline = shape["outline"] if derive.area(shape["outline"]) > 0 else shape["outline"][::-1]
+                cx, cy = outline[0]
+                corners = [f.createIfcCartesianPoint(p) for p in _distinct([(x - cx, y - cy) for x, y in outline])]
+                if len(corners) < 3:
+                    continue
+                profile = f.createIfcArbitraryClosedProfileDef("AREA", None, f.createIfcPolyline([*corners, corners[0]]))
+            base = f.createIfcAxis2Placement3D(
+                f.createIfcCartesianPoint((float(cx - shift[0]), float(cy - shift[1]), float(shape["elevation"] - shift[2])))
+            )
+            solid = f.createIfcExtrudedAreaSolid(profile, None, self.direction(_Z), 3.0 / self.metres)
+            product = f.create_entity(
+                "IfcColumn",
+                GlobalId=ifcopenshell.guid.new(),
+                Name=f"COLUMN:{shape['handle']:X}",
+                ObjectType="derived from plan linework",
+                Tag=f"{shape['handle']:X}",
+                ObjectPlacement=f.createIfcLocalPlacement(storey.ObjectPlacement, base),
+                Representation=f.createIfcProductDefinitionShape(
+                    None, None, [f.createIfcShapeRepresentation(self.body_context, "Body", "SweptSolid", [solid])]
+                ),
+            )
+            self.described[self.d.layers.get(shape["layer"], {}).get("name", ""), "derived column", "by layer"].append(product)
+            made.append(product)
+        if made:
+            f.createIfcRelContainedInSpatialStructure(ifcopenshell.guid.new(), None, None, None, made, storey)
+            self.property_set(
+                "DWG_Derived",
+                {"Source": "a closed shape on a column layer, taken as the column's section",
+                 "Height": "assumed 3 m; the drawing does not give one"},
+                made,
+            )  # fmt: skip
 
     def element_class(self, e, items) -> str:
         """Solids and meshes are things in the model, and so is a block whose name or layer says what it is.

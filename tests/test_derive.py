@@ -105,3 +105,23 @@ def test_walls_become_ifc_walls_with_types():
     assert (box.SweptArea.YDim, box.Depth) == (0.2, 3.0) and box.SweptArea.XDim in (3.0, 4.0)
     usage = ifcopenshell.util.element.get_material(wall)
     assert usage.is_a("IfcMaterialLayerSetUsage") and usage.ForLayerSet.MaterialLayers[0].LayerThickness == 0.2
+
+
+def test_columns_come_from_closed_shapes_on_column_layers():
+    d = plan()
+    d.layers[13] = {"name": "S-COLS", "color": 7}
+    common = {"owner": 1, "invisible": 0, "color": None, "lineweight": 29, "layer": 13, "extrusion": Z}
+    square = [(1.0, 1.0), (1.4, 1.0), (1.4, 1.4), (1.0, 1.4)]
+    d.entities = [
+        common | {"type": "LWPOLYLINE", "handle": 600, "points": square, "bulges": [], "closed": True, "elevation": 0.0},
+        common | {"type": "HATCH", "handle": 601, "elevation": 0.0, "solid": True,
+                  "paths": [{"flags": 1, "points": square, "bulges": [], "closed": True}]},  # the same column, hatched
+        common | {"type": "CIRCLE", "handle": 602, "center": (5.0, 1.0, 0.0), "radius": 0.25},
+        common | {"type": "CIRCLE", "handle": 603, "center": (8.0, 1.0, 0.0), "radius": 0.01},  # a mark, not a column
+    ]  # fmt: skip
+    model, _ = ifc.build(d, "columns")
+    columns = model.by_type("IfcColumn")
+    profiles = sorted(c.Representation.Representations[0].Items[0].SweptArea.is_a() for c in columns)
+    assert profiles == ["IfcArbitraryClosedProfileDef", "IfcCircleProfileDef"]
+    assert all(c.Representation.Representations[0].Items[0].Depth == 3.0 for c in columns)
+    assert model.by_type("IfcBuildingStorey")[0].Elevation == 0.0

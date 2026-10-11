@@ -197,3 +197,40 @@ def walls(drawing, owner, wanted, thinnest: float, thickest: float, shortest: fl
                     "layer": low["layer"],
                 })  # fmt: skip
     return out
+
+
+def footprints(drawing, owner, wanted, smallest: float, largest: float) -> list[dict]:
+    """Closed shapes on the wanted visible layers, as outlines: the plan section of a column, say.
+
+    Circles are returned as {"center", "radius"}, everything else as {"outline"}. A shape drawn twice
+    (an outline and its hatch) is returned once.
+    """
+    out, seen = [], set()
+    for e in drawing.entities:
+        layer = drawing.layers.get(e["layer"], {})
+        if e["owner"] != owner or e["invisible"] or layer.get("off") or layer.get("frozen") or not wanted(layer.get("name", "")):
+            continue
+        if e.get("extrusion", _Z) != _Z:
+            continue
+        shape = {"layer": e["layer"], "handle": e["handle"], "elevation": e.get("elevation", 0.0)}
+        if e["type"] == "CIRCLE":
+            shape |= {"center": e["center"][:2], "radius": e["radius"], "elevation": e["center"][2]}
+            size, (cx, cy) = math.pi * e["radius"] ** 2, e["center"][:2]
+        elif e["type"] in ("LWPOLYLINE", "POLYLINE_2D") and e["closed"] or e["type"] == "HATCH" and e["paths"]:
+            points, bulges = (e["points"], e["bulges"]) if "points" in e else (e["paths"][0]["points"], e["paths"][0]["bulges"])
+            outline = _outline([p[:2] for p in points], bulges)
+            if len(outline) < 3:
+                continue
+            size = abs(area(outline))
+            cx, cy = sum(p[0] for p in outline) / len(outline), sum(p[1] for p in outline) / len(outline)
+            shape["outline"] = outline
+        else:
+            continue
+        if not smallest <= size <= largest:
+            continue
+        grain = math.sqrt(size) / 20
+        key = (round(cx / grain), round(cy / grain))
+        if key not in seen:
+            seen.add(key)
+            out.append(shape)
+    return out
