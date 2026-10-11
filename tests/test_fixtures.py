@@ -231,8 +231,9 @@ def test_properties_reach_the_ifc(path):
     assert {p["DWG_Block"]["BlockName"] for p in psets} == {"SYMBOL"}
     red = next(p for p in model.by_type("IfcProduct") if p.ObjectType == "CIRCLE"
                and ifcopenshell.util.element.get_psets(p)["DWG_Entity"]["Layer"].upper() == "REDLAYER")  # fmt: skip
-    assert ifcopenshell.util.element.get_psets(red)["DWG_Entity"] | {"id": 0, "Layer": "REDLAYER"} == {
-        "id": 0, "Layer": "REDLAYER", "EntityType": "CIRCLE", "Colour": "255,0,0",
+    described = ifcopenshell.util.element.get_psets(red)["DWG_Entity"]
+    assert described | {"id": 0, "Layer": "REDLAYER", "Linetype": described["Linetype"].capitalize()} == {
+        "id": 0, "Layer": "REDLAYER", "EntityType": "CIRCLE", "Colour": "255,0,0", "Linetype": "Continuous",
     }  # fmt: skip
     solids = [p for p in model.by_type("IfcBuildingElementProxy") if p.ObjectType == "3DSOLID"]
     assert solids and all(p.Tag and p.Name.endswith(":" + p.Tag) for p in solids)  # the DWG handle

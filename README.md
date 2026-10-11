@@ -20,7 +20,7 @@ DWG releases R14, R2000, R2004, R2007, R2010, R2013 and R2018.
 | Meshes, polyface meshes, 3D faces | `IfcPolygonalFaceSet` |
 | Multileaders, wipeouts and custom entities | drawn from the picture of themselves they carry, when they have one |
 | Layers | `IfcPresentationLayerAssignment` |
-| Colours and line weights | `IfcStyledItem` with curve, fill or surface styles |
+| Colours, line weights, linetypes | `IfcStyledItem` with curve, fill or surface styles |
 | Drawing units | IFC length unit |
 
 ## Building elements
@@ -50,7 +50,7 @@ viewers can display it. Its real position is kept in the file as `IfcMapConversi
 Entities on layers that are switched off or frozen are left out, as AutoCAD hides them.
 
 Not converted yet: rays and construction lines, lights, custom entities that carry no picture of
-themselves, linetypes, text fonts, and paper-space layouts of drawings that also have a model. Anything left out is counted in the
+themselves, text fonts, and paper-space layouts of drawings that also have a model. Anything left out is counted in the
 `X-DWG-Skipped` response header, so nothing is dropped silently.
 
 ## Run with Docker

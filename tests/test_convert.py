@@ -145,3 +145,15 @@ def test_plan_walls_become_ifc_walls():
     assert [t.Name for t in model.by_type("IfcWallType")] == ["Wall 152 mm"]
     assert len(model.by_type("IfcWall")) == 14
     assert {round(w.Representation.Representations[0].Items[0].SweptArea.YDim, 6) for w in model.by_type("IfcWall")} == {6.0}
+
+
+def test_linetypes_reach_the_ifc():
+    sample = ASSETS / "carriage.dwg"
+    if not sample.exists():
+        pytest.skip("sample not present")
+    model = ifcopenshell.file.from_string(convert(sample.read_bytes())[0])
+    fonts = {font.Name: [(p.VisibleSegmentLength, p.InvisibleSegmentLength) for p in font.PatternList] for font in model.by_type("IfcCurveStyleFont")}
+    # AutoCAD's standard centre line: long dash, gap, short dash, gap
+    assert fonts["CENTER"] == [(1.25, 0.25), (0.25, 0.25)]
+    assert fonts["HIDDEN"] == [(0.25, 0.125)]
+    assert any(style.CurveFont for style in model.by_type("IfcCurveStyle"))

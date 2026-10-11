@@ -15,6 +15,7 @@ class Drawing:
         self.metric = False  # MEASUREMENT: fallback when the drawing declares no units
         self.layers: dict[int, dict] = {}  # handle -> {name, color, lineweight, off, frozen, locked}
         self.blocks: dict[int, dict] = {}  # block header handle -> {name, base, units}
+        self.linetypes: dict[int, dict] = {}  # handle -> {name, dashes}; a dash is a length, negative for a gap
         self.apps: dict[int, str] = {}  # registered application handle -> name, for xdata
         self.dimstyles: dict[int, dict] = {}  # handle -> {scale, arrow, text}
         self.spaces: dict[str, int] = {}  # "model" and "paper" -> block header handle, from the block table
@@ -116,15 +117,15 @@ def _object_common(o: dwg.Obj) -> int:
     return reactors + has_dictionary  # handles between the owner and the object's own handles
 
 
-def _table_name(o: dwg.Obj) -> str:
+def _table_name(o: dwg.Obj, with_handle_count: bool = False):
     """Start of every table record (LAYER, BLOCK_HEADER, ...): its name and xref flags."""
-    _object_common(o)
+    skip = _object_common(o)
     name = o.text()
     if since(o.release, "R2007"):
         o.r.bs()  # xref index, with the 64-flag and xdep bits folded in
     else:
         o.r.b(), o.r.bs(), o.r.b()  # 64-flag, xref index, xdep
-    return name
+    return (name, skip) if with_handle_count else name
 
 
 def _true_color(word: int):
@@ -139,7 +140,7 @@ def _true_color(word: int):
 
 def _layer(o: dwg.Obj) -> dict:
     """Colours are a palette index (1-255) or an (r, g, b) tuple, here and on entities."""
-    name = _table_name(o)
+    name, skip = _table_name(o, True)
     r = o.r
     if since(o.release, "R2000"):
         flags = r.bs()
@@ -159,7 +160,23 @@ def _layer(o: dwg.Obj) -> dict:
         color = r.bs()
         if color > 0x7FFF:  # stored negative when the layer is off
             color, off = 0x10000 - color, True
-    return {"name": name, "color": color or 7, "lineweight": lineweight, "off": off, "frozen": frozen, "locked": locked}
+    # handles: owner, reactors and dictionary, xref block, plot style (R2000+), material (R2007+), then the linetype
+    for _ in range(2 + skip + since(o.release, "R2000") + since(o.release, "R2007")):
+        o.handles.h(o.handle)
+    return {"name": name, "color": color or 7, "lineweight": lineweight, "off": off, "frozen": frozen, "locked": locked,
+            "linetype": o.handles.h(o.handle)}  # fmt: skip
+
+
+def _linetype(o: dwg.Obj) -> dict:
+    name = _table_name(o)
+    r = o.r
+    o.text()  # description
+    r.bd(), r.rc()  # pattern length, alignment
+    dashes = []
+    for _ in range(r.rc()):
+        dashes.append(r.bd())
+        r.bs(), r.rd(), r.rd(), r.bd(), r.bd(), r.bs()  # shape or text carried by the dash
+    return {"name": name, "dashes": dashes}
 
 
 def _block_control(o: dwg.Obj) -> dict:
@@ -243,10 +260,11 @@ def _entity_common(o: dwg.Obj) -> dict:
     links = not since(release, "R2004")  # older files chain entities; sub-entity lists (vertices) rely on it
     if links:
         e["next"] = o.handle + 1
+    e["linetype"] = {0: None, 1: "ByBlock", 2: "Continuous"}.get(ltype)  # None: by layer; a handle when set below
     if not since(release, "R2000"):
         e["layer"] = hr.h(o.handle)
         if ltype == 3:
-            hr.h()
+            e["linetype"] = hr.h(o.handle)
     if links and not no_links:
         hr.h(o.handle)
         e["next"] = hr.h(o.handle)
@@ -254,7 +272,9 @@ def _entity_common(o: dwg.Obj) -> dict:
         hr.h()  # colour book reference
     if since(release, "R2000"):
         e["layer"] = hr.h(o.handle)
-        for present in (ltype == 3, material == 3, plotstyle == 3):
+        if ltype == 3:
+            e["linetype"] = hr.h(o.handle)
+        for present in (material == 3, plotstyle == 3):
             if present:
                 hr.h()
     for _ in range(visual_styles):
@@ -859,6 +879,11 @@ def load(data: bytes) -> Drawing:
                     drawing.dimstyles[o.handle] = _dimstyle(o)
                 except ValueError:
                     pass  # sizes fall back to defaults
+            elif o.type == "LTYPE":
+                try:
+                    drawing.linetypes[o.handle] = _linetype(o)
+                except ValueError:
+                    pass  # drawn as a solid line
             elif o.type == "APPID":
                 drawing.apps[o.handle] = _table_name(o)
             elif o.type == "BLOCK_CONTROL":

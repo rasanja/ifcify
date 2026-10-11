@@ -284,8 +284,8 @@ class _Builder:
                 self.columns(storey, handle)
         for kind, occurrences in self.typed.items():
             f.createIfcRelDefinesByType(ifcopenshell.guid.new(), None, None, None, occurrences, kind)
-        for (layer, kind, colour), described in self.described.items():
-            self.property_set("DWG_Entity", {"Layer": layer, "EntityType": kind, "Colour": colour}, described)
+        for (layer, kind, colour, linetype), described in self.described.items():
+            self.property_set("DWG_Entity", {"Layer": layer, "EntityType": kind, "Colour": colour, "Linetype": linetype}, described)
         for name, items in self.layer_items.items():
             if items:  # a layer whose entities all came out empty has nothing to assign
                 f.createIfcPresentationLayerAssignment(name, None, items, None)
@@ -307,7 +307,7 @@ class _Builder:
         colour = e["color"] or layer.get("color", 7)
         colour = "by block" if e["color"] == 0 else ",".join(map(str, _rgb(colour)))
         # shared by every entity with the same layer, type and colour; the handle is in the product's name
-        self.described[layer.get("name", "0"), e["type"], colour].append(product)
+        self.described[layer.get("name", "0"), e["type"], colour, self.linetype(e, layer).get("name", "Continuous")].append(product)
         if product.is_a("IfcElement"):
             product.Tag = f"{e['handle']:X}"
         block = self.d.blocks.get(e.get("block"))
@@ -418,7 +418,7 @@ class _Builder:
             )
             by_thickness[millimetres].append((product, thickness))
             layer = self.d.layers.get(wall["layer"], {}).get("name", "")
-            self.described[layer, "derived wall", "by layer"].append(product)
+            self.described[layer, "derived wall", "by layer", "by layer"].append(product)
             made.append(product)
         if not made:
             return
@@ -474,7 +474,7 @@ class _Builder:
                     None, None, [f.createIfcShapeRepresentation(self.body_context, "Body", "SweptSolid", [solid])]
                 ),
             )
-            self.described[self.d.layers.get(shape["layer"], {}).get("name", ""), "derived column", "by layer"].append(product)
+            self.described[self.d.layers.get(shape["layer"], {}).get("name", ""), "derived column", "by layer", "by layer"].append(product)
             made.append(product)
         if made:
             f.createIfcRelContainedInSpatialStructure(ifcopenshell.guid.new(), None, None, None, made, storey)
@@ -569,12 +569,29 @@ class _Builder:
         self.style(e, layer, found)
         return found
 
+    def linetype(self, e, layer) -> dict:
+        """The entity's linetype, or its layer's: {name, dashes}. Empty for a plain solid line."""
+        own = e.get("linetype")
+        return self.d.linetypes.get(own if isinstance(own, int) else layer.get("linetype") if own is None else None, {})
+
+    def curve_font(self, linetype):
+        """Dashes and gaps as an IfcCurveStyleFont, or None for a solid line."""
+        dashes = linetype.get("dashes") or []
+        key = ("font", linetype.get("name"), tuple(dashes))
+        if key not in self.styles:
+            # shortcut: lengths are the pattern's own, not multiplied by the drawing's or the entity's linetype scale
+            pairs = [(max(d, 0.0), -gap) for d, gap in zip(dashes, dashes[1:] + dashes[:1]) if d >= 0 and gap < 0]
+            pattern = [self.f.createIfcCurveStyleFontPattern(float(visible), float(invisible)) for visible, invisible in pairs]
+            self.styles[key] = self.f.createIfcCurveStyleFont(linetype.get("name"), pattern) if pattern else None
+        return self.styles[key]
+
     def style(self, e, layer, items) -> None:
-        """Colour and line weight, from the entity or else its layer."""
+        """Colour, line weight and linetype, from the entity or else its layer."""
         # shortcut: "by block" also takes the layer's value, since one shared block definition cannot vary per insert
         color = e["color"] or layer.get("color", 7)
         code = e["lineweight"] if e["lineweight"] < 29 else layer.get("lineweight", 31)
         width = _LINEWEIGHTS[code] / 100 * self.millimetre if code < len(_LINEWEIGHTS) and _LINEWEIGHTS[code] else None
+        font = self.curve_font(self.linetype(e, layer))
         f = self.f
         for item in items:
             kind = _kind(item)
@@ -582,7 +599,8 @@ class _Builder:
                 continue  # a block's contents are styled where the block is defined
             surface = kind in _BODY_KINDS
             rgb = (255, 255, 255) if surface and color == 7 else _rgb(color)  # 7 on a solid: white, so it can be shaded
-            key = (kind if kind == "FillArea" or surface else "Curve", rgb, None if surface or kind == "FillArea" else width)
+            curve = not surface and kind != "FillArea"
+            key = ("Curve" if curve else kind, rgb, width if curve else None, font.id() if curve and font else None)
             if key not in self.styles:
                 colour = f.createIfcColourRgb(None, *(c / 255 for c in rgb))
                 if surface:
@@ -591,7 +609,7 @@ class _Builder:
                     self.styles[key] = f.createIfcFillAreaStyle(None, [colour], None)
                 else:
                     thickness = f.createIfcPositiveLengthMeasure(width) if width else None
-                    self.styles[key] = f.createIfcCurveStyle(None, None, thickness, colour, None)
+                    self.styles[key] = f.createIfcCurveStyle(None, font, thickness, colour, None)
             f.createIfcStyledItem(item, [self.styles[key]], None)
 
     def polyline(self, points):
