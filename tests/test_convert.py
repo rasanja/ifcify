@@ -86,7 +86,13 @@ def test_conference_room_solids_become_breps():
     # 327 ACIS faces; the 6 on self-intersecting tori have no IFC surface and are reported instead
     assert len(model.by_type("IfcAdvancedFace")) == 327
     assert skipped == {"LIGHT": 8}
-    assert len(model.by_type("IfcBuildingElementProxy")) == 38  # 30 solids, 2 surfaces, 6 light fixtures
+    assert len(model.by_type("IfcBuildingElementProxy")) == 32  # 30 solids, 2 surfaces
+    # the block "Fluorescent Fixture" is a type, and its six inserts are light fixtures of that type
+    fixtures = model.by_type("IfcLightFixture")
+    kind = model.by_type("IfcLightFixtureType")[0]
+    assert len(fixtures) == 6 and kind.Name == "Fluorescent Fixture"
+    assert set(model.by_type("IfcRelDefinesByType")[0].RelatedObjects) == set(fixtures)
+    assert all(f.Representation.Representations[0].Items[0].MappingSource in kind.RepresentationMaps for f in fixtures)
     assert model.by_type("IfcBSplineSurfaceWithKnots") and model.by_type("IfcToroidalSurface")
 
 

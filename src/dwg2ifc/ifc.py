@@ -18,6 +18,7 @@ import ifcopenshell.api.root
 import ifcopenshell.api.unit
 import ifcopenshell.guid
 
+from dwg2ifc.classify import classify
 from dwg2ifc.entities import Drawing, bspline_points, fit_spline
 
 # DWG INSUNITS code -> (SI prefix, None) or (None, conversion unit name)
@@ -55,6 +56,11 @@ def _rgb(color) -> tuple[int, int, int]:
     r, g, b = ((1, rising, low), (falling, 1, low), (low, 1, rising), (low, falling, 1), (rising, low, 1), (1, low, falling))[int(sector) % 6]
     return int(255 * shade * r), int(255 * shade * g), int(255 * shade * b)
 
+
+# Classes a block insert may take from its layer alone: things that are placed as objects. A block that merely
+# sits on a wall or floor layer is more likely a pattern or a mark than a wall or a slab.
+_PLACED = {"IfcDoor", "IfcWindow", "IfcStair", "IfcColumn", "IfcSanitaryTerminal", "IfcLightFixture", "IfcOutlet",
+           "IfcFurniture", "IfcGeographicElement"}  # fmt: skip
 
 # DWG entity type -> _Builder method, where the name is not simply the lowercased type
 _METHODS = {"POLYLINE_2D": "lwpolyline", "ATTRIB": "text", "TRACE": "solid", "3DFACE": "face3d",
@@ -182,6 +188,8 @@ class _Builder:
         self.maps: dict[int, object] = {}  # block handle -> IfcRepresentationMap, or None if empty
         self.styles: dict[tuple, object] = {}  # (kind, colour, width) -> shared style entity
         self.values: dict[tuple, object] = {}  # (name, value) -> shared IfcPropertySingleValue
+        self.types: dict[tuple, object] = {}  # (block handle, IFC class) -> its IfcTypeProduct
+        self.typed = defaultdict(list)  # type entity -> occurrences
         self.described = defaultdict(list)  # (layer, entity type, colour) -> products with those properties
         self.attributes = defaultdict(list)  # insert handle -> [(tag, value)] from its block attributes
         for e in drawing.entities:
@@ -216,6 +224,9 @@ class _Builder:
         self.body_context = ifcopenshell.api.context.add_context(
             f, context_type="Model", context_identifier="Body", target_view="MODEL_VIEW", parent=model
         )
+        self.footprint_context = ifcopenshell.api.context.add_context(
+            f, context_type="Model", context_identifier="FootPrint", target_view="MODEL_VIEW", parent=model
+        )
         self.origin = f.createIfcAxis2Placement3D(f.createIfcCartesianPoint((0.0, 0.0, 0.0)))
         self.identity = f.createIfcCartesianTransformationOperator3D(None, None, self.origin.Location)
 
@@ -243,15 +254,23 @@ class _Builder:
                 items = self.items(e, ())
                 if not items:
                     continue
-                representation = self.representation(items)
-                shape = f.createIfcProductDefinitionShape(None, None, [representation])
-                # solids and meshes are things in the model; everything else is drafting
-                create = f.createIfcBuildingElementProxy if representation.RepresentationIdentifier == "Body" else f.createIfcAnnotation
-                placement = f.createIfcLocalPlacement(storey.ObjectPlacement, self.origin)
-                products.append(create(ifcopenshell.guid.new(), None, f"{e['type']}:{e['handle']:X}", None, e["type"], placement, shape))
-                self.describe(e, products[-1])
+                ifc_class = self.element_class(e, items)
+                representation = self.representation(items, footprint=ifc_class != "IfcAnnotation")
+                product = f.create_entity(
+                    ifc_class,
+                    GlobalId=ifcopenshell.guid.new(),
+                    Name=f"{e['type']}:{e['handle']:X}",
+                    ObjectType=e["type"],
+                    ObjectPlacement=f.createIfcLocalPlacement(storey.ObjectPlacement, self.origin),
+                    Representation=f.createIfcProductDefinitionShape(None, None, [representation]),
+                )
+                products.append(product)
+                self.describe(e, product)
+                self.give_type(e, product, items)
             if products:
                 f.createIfcRelContainedInSpatialStructure(ifcopenshell.guid.new(), None, None, None, products, storey)
+        for kind, occurrences in self.typed.items():
+            f.createIfcRelDefinesByType(ifcopenshell.guid.new(), None, None, None, occurrences, kind)
         for (layer, kind, colour), described in self.described.items():
             self.property_set("DWG_Entity", {"Layer": layer, "EntityType": kind, "Colour": colour}, described)
         for name, items in self.layer_items.items():
@@ -294,7 +313,32 @@ class _Builder:
                 listed = "; ".join(f"{code}={value}" for code, value in items)
                 self.property_set("DWG_XData", {name: listed}, [product])
 
-    def representation(self, items):
+    def element_class(self, e, items) -> str:
+        """Solids and meshes are things in the model, and so is a block whose name or layer says what it is.
+        Everything else is drafting."""
+        layer = self.d.layers.get(e["layer"], {}).get("name", "")
+        if any(_kind(i) in _BODY_KINDS or self.is_body(i) for i in items):
+            return classify(self.d.blocks.get(e.get("block"), {}).get("name", ""), layer) or "IfcBuildingElementProxy"
+        if e["type"] in ("INSERT", "MINSERT"):
+            by_layer = classify(layer)
+            return classify(self.d.blocks.get(e["block"], {}).get("name", "")) or (by_layer if by_layer in _PLACED else None) or "IfcAnnotation"
+        return "IfcAnnotation"
+
+    def is_body(self, item) -> bool:
+        return item.is_a("IfcMappedItem") and item.MappingSource.MappedRepresentation.RepresentationIdentifier == "Body"
+
+    def give_type(self, e, product, items) -> None:
+        """A named block is a type and each insert of it an occurrence, as a family and its instances."""
+        block = self.d.blocks.get(e.get("block"))
+        if not product.is_a("IfcElement") or not block or block["name"].startswith("*") or e["type"] != "INSERT":
+            return
+        key = (e["block"], product.is_a())
+        if key not in self.types:
+            self.types[key] = ifcopenshell.api.root.create_entity(self.f, ifc_class=product.is_a() + "Type", name=block["name"])
+            self.types[key].RepresentationMaps = [self.maps[e["block"]]]
+        self.typed[self.types[key]].append(product)
+
+    def representation(self, items, footprint=False):
         groups = defaultdict(list)
         for item in items:
             groups[_kind(item)].append(item)
@@ -307,11 +351,10 @@ class _Builder:
                 items.append(self.f.createIfcMappedItem(nested, self.identity))
             groups = {"MappedRepresentation": items}
         ((kind, items),) = groups.items()
-        body = kind in _BODY_KINDS or any(
-            i.is_a("IfcMappedItem") and i.MappingSource.MappedRepresentation.RepresentationIdentifier == "Body" for i in items
-        )
-        if body:
+        if kind in _BODY_KINDS or any(self.is_body(i) for i in items):
             return self.f.createIfcShapeRepresentation(self.body_context, "Body", kind, items)
+        if footprint:  # an element known only by its plan symbol
+            return self.f.createIfcShapeRepresentation(self.footprint_context, "FootPrint", kind, items)
         return self.f.createIfcShapeRepresentation(self.context, "Annotation", kind, items)
 
     def xyz(self, p):
