@@ -11,7 +11,7 @@ from pathlib import Path
 import ifcopenshell
 import pytest
 
-from dwg2ifc import convert, entities
+from dwg2ifc import convert, entities, ifc
 
 FIXTURES = Path(__file__).parent / "fixtures"
 RELEASES = sorted(FIXTURES.glob("entities_*.dwg"))
@@ -133,10 +133,41 @@ def test_matches_autocad_dxf(path, dxf):
 
 
 @pytest.mark.parametrize("path", RELEASES, ids=lambda p: p.stem)
+def test_colours_and_layers_match_autocad(path, dxf):
+    """The script draws on a red layer with a 0.50 mm line weight, a layer turned off and a frozen one."""
+    drawing = entities.load(path.read_bytes())
+    layers = {layer["name"].upper(): layer for layer in drawing.layers.values()}
+    true_colour = drawing.release not in ("R14", "R2000")  # older files only have the palette; AutoCAD picks 168
+    assert layers["REDLAYER"]["color"] == 1
+    assert (layers["OFFLAYER"]["color"], layers["OFFLAYER"]["off"], layers["OFFLAYER"]["frozen"]) == (3, True, False)
+    assert layers["FROZENLAYER"]["color"] == ((10, 20, 30) if true_colour else 168)
+    assert (layers["FROZENLAYER"]["off"], layers["FROZENLAYER"]["frozen"]) == (False, True)
+    assert not layers["0"]["off"] and not layers["0"]["frozen"] and layers["0"]["color"] == 7
+    if drawing.release != "R14":  # line weights arrived with R2000
+        assert ifc._LINEWEIGHTS[layers["REDLAYER"]["lineweight"]] == 50
+    # two lines with their own colour, one of them with its own 0.35 mm weight
+    blue, orange = (next(e for e in drawing.entities if e["type"] == "LINE" and e["start"][:2] == (0.0, y)) for y in (180.0, 182.0))
+    assert blue["color"] == 5
+    assert orange["color"] == ((200, 100, 50) if true_colour else 32)  # 32 is AutoCAD's nearest palette colour
+    if drawing.release != "R14":
+        assert ifc._LINEWEIGHTS[orange["lineweight"]] == 35
+    assert all(e["color"] is None for e in drawing.entities if e["type"] == "CIRCLE")  # by layer
+
+
+def test_palette():
+    # values AutoCAD documents for its colour index
+    assert [ifc._rgb(i) for i in (1, 5, 8, 10, 11, 12, 13, 19, 20, 30, 50, 250, 255)] == [
+        (255, 0, 0), (0, 0, 255), (65, 65, 65), (255, 0, 0), (255, 127, 127), (204, 0, 0), (204, 102, 102), (76, 38, 38),
+        (255, 63, 0), (255, 127, 0), (255, 255, 0), (51, 51, 51), (255, 255, 255),
+    ]  # fmt: skip
+    assert ifc._rgb((1, 2, 3)) == (1, 2, 3)
+
+
+@pytest.mark.parametrize("path", RELEASES, ids=lambda p: p.stem)
 def test_converts_to_ifc(path):
     text, skipped = convert(path.read_bytes())
     assert "FILE_SCHEMA(('IFC4X3_ADD2'))" in text
-    assert set(skipped) <= {"RAY", "XLINE", "WIPEOUT"}
+    assert skipped == {"RAY": 1, "XLINE": 1, "on a layer that is off or frozen": 2}
     # the box and the sphere are closed solids, the region is an open sheet
     model = ifcopenshell.file.from_string(text)
     # two frustums and a cylinder, the wedge, the box; whole primitives use IFC's own solids
@@ -154,3 +185,8 @@ def test_converts_to_ifc(path):
     assert corners == {(x, y, z) for x in (300.0, 310.0) for y in (0.0, 8.0) for z in (0.0, 6.0)}  # as drawn: BOX 300,0,0 310,8,6
     if "entities_14" not in path.name:
         assert ".LENGTHUNIT.,.MILLI.,.METRE." in text
+    # the circles on the off and frozen layers are left out, as AutoCAD hides them; the red layer's colour reaches the IFC
+    names = {layer.Name.upper() for layer in model.by_type("IfcPresentationLayerAssignment")}
+    assert "REDLAYER" in names and not names & {"OFFLAYER", "FROZENLAYER"}
+    red = [style for style in model.by_type("IfcCurveStyle") if tuple(style.CurveColour)[1:] == (1.0, 0.0, 0.0)]
+    assert red and all(item.is_a("IfcCircle") for style in red for styled in model.get_inverse(style) for item in [styled.Item])

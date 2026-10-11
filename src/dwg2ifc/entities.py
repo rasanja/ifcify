@@ -12,7 +12,7 @@ class Drawing:
         self.release = ""
         self.units = 0  # INSUNITS code; 0 means the drawing declares none
         self.metric = False  # MEASUREMENT: fallback when the drawing declares no units
-        self.layers: dict[int, str] = {}  # handle -> name
+        self.layers: dict[int, dict] = {}  # handle -> {name, color, lineweight, off, frozen, locked}
         self.blocks: dict[int, dict] = {}  # block header handle -> {name, base, units}
         self.entities: list[dict] = []  # each has type, handle, owner (block header handle), layer
         self.skipped: Counter[str] = Counter()  # entity types we could not convert
@@ -123,6 +123,41 @@ def _table_name(o: dwg.Obj) -> str:
     return name
 
 
+def _true_color(word: int):
+    """A 32-bit colour value: its top byte says whether the rest is red-green-blue or a palette index."""
+    method = word >> 24
+    if method == 0xC2:
+        return ((word >> 16) & 0xFF, (word >> 8) & 0xFF, word & 0xFF)
+    if method == 0xC3:
+        return word & 0xFF
+    return None
+
+
+def _layer(o: dwg.Obj) -> dict:
+    """Colours are a palette index (1-255) or an (r, g, b) tuple, here and on entities."""
+    name = _table_name(o)
+    r = o.r
+    if since(o.release, "R2000"):
+        flags = r.bs()
+        frozen, off, locked, lineweight = bool(flags & 1), bool(flags & 2), bool(flags & 8), (flags >> 5) & 0x1F
+    else:
+        # the second bit means off, though the spec calls it "on" (checked against a layer AutoCAD turned off)
+        frozen, off, _, locked, lineweight = bool(r.b()), bool(r.b()), r.b(), bool(r.b()), 31
+    if since(o.release, "R2004"):
+        r.bs()
+        color = _true_color(r.bl())
+        names = r.rc()
+        if not o.unicode:
+            for bit in (1, 2):
+                if names & bit:
+                    o.text()
+    else:
+        color = r.bs()
+        if color > 0x7FFF:  # stored negative when the layer is off
+            color, off = 0x10000 - color, True
+    return {"name": name, "color": color or 7, "lineweight": lineweight, "off": off, "frozen": frozen, "locked": locked}
+
+
 def _block_header(o: dwg.Obj) -> dict:
     name = _table_name(o)
     r = o.r
@@ -162,14 +197,16 @@ def _entity_common(o: dwg.Obj) -> dict:
     if not since(release, "R2000"):
         ltype = 0 if r.b() else 3  # "by layer" bit: when clear, a linetype handle follows
     if since(release, "R2004"):
-        color_flags = r.bs() >> 8
+        color = r.bs()
+        color_flags, color = color >> 8, color & 0x1FF
         if color_flags & 0x80:
-            r.bl()  # rgb
+            color = _true_color(r.bl())
         if color_flags & 0x20:
             r.bl()  # transparency
     else:
         no_links = r.b()
-        r.bs()  # colour index
+        color = r.bs()
+    color = None if color in (None, 256) else color  # None: by layer. 0: by block
     r.bd()  # linetype scale
     if since(release, "R2000"):
         ltype, plotstyle = r.bb(), r.bb()
@@ -179,10 +216,9 @@ def _entity_common(o: dwg.Obj) -> dict:
     if since(release, "R2010"):
         visual_styles = r.b() + r.b() + r.b()
     invisible = r.bs() & 1
-    if since(release, "R2000"):
-        r.rc()  # lineweight
+    lineweight = r.rc() if since(release, "R2000") else 29  # 29: by layer
 
-    e = {"type": o.type, "handle": o.handle, "invisible": invisible, "graphics": graphics}
+    e = {"type": o.type, "handle": o.handle, "invisible": invisible, "graphics": graphics, "color": color, "lineweight": lineweight}
     e["owner"] = hr.h(o.handle) if entmode == 0 else {1: "paper", 2: "model"}.get(entmode)
     for _ in range(reactors):
         hr.h()
@@ -669,7 +705,9 @@ def load(data: bytes) -> Drawing:
             o = dwg.read_object(objects, loc, release, names)
             kind = o.type
             if o.type == "LAYER":
-                drawing.layers[o.handle] = _table_name(o)
+                drawing.layers[o.handle] = _layer(o)
+                if o.r.p != o.end:
+                    raise ValueError(f"LAYER {o.handle:X} decoded to bit {o.r.p}, expected {o.end}")
             elif o.type == "BLOCK_HEADER":
                 drawing.blocks[o.handle] = _block_header(o)
             elif o.type in _DECODERS:

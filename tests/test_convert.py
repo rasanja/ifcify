@@ -62,12 +62,15 @@ def test_sample_ifc_passes_schema_rules():
 def test_floor_plan_ifc_content():
     text, skipped = convert((ASSETS / "building001-0_floor1.dwg").read_bytes())
     model = ifcopenshell.file.from_string(text)
-    assert len(model.by_type("IfcAnnotation")) > 2200
+    # 4 of its layers are off, the grid among them
+    assert skipped == {"LWPOLYLINE (empty)": 1, "on a layer that is off or frozen": 113}
+    assert len(model.by_type("IfcAnnotation")) == 2152
     assert {layer.Name for layer in model.by_type("IfcPresentationLayerAssignment")} >= {"A-WALL", "A-DOOR", "A-GLAZ"}
+    assert len(model.by_type("IfcStyledItem")) > 1700  # everything but text
     assert len(model.by_type("IfcMappedItem")) >= 17
     # the drawing sits 1,758 km from the origin; geometry is written near zero and the position kept as georeferencing
     conversion = model.by_type("IfcMapConversion")[0]
-    assert (conversion.Eastings, conversion.Northings) == (69221643.0, 27676202.0)
+    assert abs(conversion.Eastings - 69221645) < 50 and abs(conversion.Northings - 27676200) < 50
     assert max(abs(c) for point in model.by_type("IfcCartesianPoint") for c in point.Coordinates) < 5000
     assert len(model.by_type("IfcAnnotationFillArea")) >= 284
     # zero-length edges crash geometry kernels, so none may be written

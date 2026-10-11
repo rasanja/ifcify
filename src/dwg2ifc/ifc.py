@@ -29,6 +29,33 @@ _METRES = {1: 0.0254, 2: 0.3048, 3: 1609.344, 4: 0.001, 5: 0.01, 6: 1.0, 7: 1000
 # Viewers hold coordinates in single precision, which is good to about a millimetre 10 km from the origin.
 _FAR = 10_000.0
 
+# line weight codes -> hundredths of a millimetre; 29 by layer, 30 by block, 31 default
+_LINEWEIGHTS = (0, 5, 9, 13, 15, 18, 20, 25, 30, 35, 40, 50, 53, 60, 70, 80, 90, 100, 106, 120, 140, 158, 200, 211)
+_SHADES = (1.0, 0.8, 0.6, 0.5, 0.3)
+_FIRST_COLORS = {1: (255, 0, 0), 2: (255, 255, 0), 3: (0, 255, 0), 4: (0, 255, 255), 5: (0, 0, 255), 6: (255, 0, 255),
+                 7: (0, 0, 0), 8: (65, 65, 65), 9: (128, 128, 128)}  # fmt: skip
+_GREYS = ((51, 51, 51), (80, 80, 80), (105, 105, 105), (130, 130, 130), (190, 190, 190), (255, 255, 255))
+
+
+def _rgb(color) -> tuple[int, int, int]:
+    """AutoCAD Color Index to red, green, blue. 7 is "white or black, whichever shows": black here, as on paper."""
+    if isinstance(color, tuple):
+        return color
+    if color in _FIRST_COLORS:
+        return _FIRST_COLORS[color]
+    if 250 <= color <= 255:
+        return _GREYS[color - 250]
+    if not 10 <= color <= 249:
+        return _FIRST_COLORS[7]
+    # 10-249: 24 hues 15 degrees apart, each in five shades, each shade at full and at half saturation
+    hue, shade = (color // 10 - 1) * 15, _SHADES[(color % 10) // 2]
+    saturation = 0.5 if color % 2 else 1.0
+    sector, fraction = divmod(hue / 60, 1)
+    low, falling, rising = 1 - saturation, 1 - saturation * fraction, 1 - saturation * (1 - fraction)
+    r, g, b = ((1, rising, low), (falling, 1, low), (low, 1, rising), (low, falling, 1), (rising, low, 1), (1, low, falling))[int(sector) % 6]
+    return int(255 * shade * r), int(255 * shade * g), int(255 * shade * b)
+
+
 # DWG entity type -> _Builder method, where the name is not simply the lowercased type
 _METHODS = {"POLYLINE_2D": "lwpolyline", "ATTRIB": "text", "TRACE": "solid", "3DFACE": "face3d",
             "3DSOLID": "acis", "REGION": "acis", "BODY": "acis"}  # fmt: skip
@@ -142,18 +169,24 @@ class _Builder:
         self.d = drawing
         self.f = f = ifcopenshell.api.project.create_file(version="IFC4X3")
         self.by_owner = defaultdict(list)
+        self.skipped = drawing.skipped.copy()
         for e in drawing.entities:
-            if not e["invisible"]:
+            layer = drawing.layers.get(e["layer"], {})
+            if layer.get("off") or layer.get("frozen"):
+                # AutoCAD does not show these, and IFC4X3 has no way to mark a layer as hidden
+                self.skipped["on a layer that is off or frozen"] += 1
+            elif not e["invisible"]:
                 self.by_owner[e["owner"]].append(e)
         self.layer_items = defaultdict(list)
         self.maps: dict[int, object] = {}  # block handle -> IfcRepresentationMap, or None if empty
-        self.skipped = drawing.skipped.copy()
+        self.styles: dict[tuple, object] = {}  # (kind, colour, width) -> shared style entity
 
         project = ifcopenshell.api.root.create_entity(f, ifc_class="IfcProject", name=name)
         model_space = drawing.block_named("*Model_Space")
         units = drawing.units or (drawing.blocks[model_space]["units"] if model_space else 0)
         prefix, conversion = _UNITS.get(units) or (("MILLI", None) if drawing.metric else (None, "inch"))
         metres = _METRES.get(units) or (0.001 if drawing.metric else 0.0254)
+        self.millimetre = 0.001 / metres  # in drawing units, for line widths
         # model space is written relative to this point; block definitions keep their own coordinates
         self.origin_shift = _far_origin(self.by_owner.get(model_space, []), metres)
         self.shift = (0.0, 0.0, 0.0)
@@ -205,8 +238,8 @@ class _Builder:
             products.append(create(ifcopenshell.guid.new(), None, f"{e['type']}:{e['handle']:X}", None, e["type"], placement, shape))
         if products:
             f.createIfcRelContainedInSpatialStructure(ifcopenshell.guid.new(), None, None, None, products, storey)
-        for layer, items in self.layer_items.items():
-            f.createIfcPresentationLayerAssignment(layer, None, items, None)
+        for name, items in self.layer_items.items():
+            f.createIfcPresentationLayerAssignment(name, None, items, None)
 
     def representation(self, items):
         groups = defaultdict(list)
@@ -265,8 +298,35 @@ class _Builder:
         found = [] if found is None else found if isinstance(found, list) else [found]
         if not found:
             self.skipped[kind + " (empty)"] += 1
-        self.layer_items[self.d.layers.get(e["layer"], "0")] += found
+        layer = self.d.layers.get(e["layer"], {})
+        self.layer_items[layer.get("name", "0")] += found
+        self.style(e, layer, found)
         return found
+
+    def style(self, e, layer, items) -> None:
+        """Colour and line weight, from the entity or else its layer."""
+        # shortcut: "by block" also takes the layer's value, since one shared block definition cannot vary per insert
+        color = e["color"] or layer.get("color", 7)
+        code = e["lineweight"] if e["lineweight"] < 29 else layer.get("lineweight", 31)
+        width = _LINEWEIGHTS[code] / 100 * self.millimetre if code < len(_LINEWEIGHTS) and _LINEWEIGHTS[code] else None
+        f = self.f
+        for item in items:
+            kind = _kind(item)
+            if kind in ("MappedRepresentation", "Text", "Point"):
+                continue  # a block's contents are styled where the block is defined
+            surface = kind in _BODY_KINDS
+            rgb = (255, 255, 255) if surface and color == 7 else _rgb(color)  # 7 on a solid: white, so it can be shaded
+            key = (kind if kind == "FillArea" or surface else "Curve", rgb, None if surface or kind == "FillArea" else width)
+            if key not in self.styles:
+                colour = f.createIfcColourRgb(None, *(c / 255 for c in rgb))
+                if surface:
+                    self.styles[key] = f.createIfcSurfaceStyle(None, "BOTH", [f.createIfcSurfaceStyleShading(colour, None)])
+                elif kind == "FillArea":
+                    self.styles[key] = f.createIfcFillAreaStyle(None, [colour], None)
+                else:
+                    thickness = f.createIfcPositiveLengthMeasure(width) if width else None
+                    self.styles[key] = f.createIfcCurveStyle(None, None, thickness, colour, None)
+            f.createIfcStyledItem(item, [self.styles[key]], None)
 
     def polyline(self, points):
         points = _distinct(points)
