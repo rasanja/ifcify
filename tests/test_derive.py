@@ -58,7 +58,12 @@ def test_rooms_become_ifc_spaces():
 def test_bulged_outline_area():
     # a circle of radius 1 drawn as two half-circle bulges
     outline = derive._outline([(1.0, 0.0), (-1.0, 0.0)], [1.0, 1.0])
-    assert abs(abs(derive.area(outline)) - 3.14159) < 0.05
+    assert abs(abs(derive.area(outline)) - 3.14159) < 0.05  # the drawn outline is chords, about 1 percent short
+    assert abs(derive.exact_area([(1.0, 0.0), (-1.0, 0.0)], [1.0, 1.0]) - 3.141592653589793) < 1e-12
+    # a 2 x 2 square with one side bulged outwards as a half circle of radius 1, drawn in either direction
+    square = [(0.0, 0.0), (2.0, 0.0), (2.0, 2.0), (0.0, 2.0)]
+    assert abs(derive.exact_area(square, [0.0, 1.0, 0.0, 0.0]) - (4 + 3.141592653589793 / 2)) < 1e-12
+    assert abs(derive.exact_area(square[::-1], [0.0, -1.0, 0.0, 0.0]) - (4 + 3.141592653589793 / 2)) < 1e-12
 
 
 def double_line_room() -> Drawing:

@@ -37,6 +37,19 @@ def _outline(points, bulges) -> list:
     return out
 
 
+def exact_area(points, bulges) -> float:
+    """Area enclosed by a closed polyline, its arcs included exactly."""
+    total = area([p[:2] for p in points])
+    for i, (x1, y1) in enumerate(points):
+        bulge = bulges[i] if i < len(bulges) else 0.0
+        if bulge:
+            x2, y2 = points[(i + 1) % len(points)][:2]
+            angle = 4 * math.atan(bulge)
+            radius = math.hypot(x2 - x1, y2 - y1) / (2 * math.sin(angle / 2))
+            total += radius * radius / 2 * (angle - math.sin(angle))  # the sliver between the chord and the arc
+    return abs(total)
+
+
 def area(outline) -> float:
     """Signed area of a closed outline: positive when counter-clockwise."""
     return sum(x1 * y2 - x2 * y1 for (x1, y1), (x2, y2) in zip(outline, outline[1:] + outline[:1])) / 2
@@ -75,7 +88,7 @@ def spaces(drawing, owner, smallest: float) -> list[dict]:
             continue
         for points, bulges in loops:
             outline = _outline([p[:2] for p in points], bulges)
-            size = abs(area(outline)) if len(outline) > 2 else 0.0
+            size = exact_area([p[:2] for p in points], bulges) if len(outline) > 2 else 0.0
             if size < smallest:
                 continue
             cx = sum(p[0] for p in outline) / len(outline)

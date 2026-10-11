@@ -34,6 +34,18 @@ def test_rejects_non_dwg():
     assert client.post("/convert", content=b"not a drawing").status_code == 422
 
 
+def test_rejects_password_protected_drawings():
+    for release in ("2004", "2007", "2018"):
+        data = bytearray((Path(__file__).parent / "fixtures" / f"entities_{release}.dwg").read_bytes())
+        data[0x18] |= 1  # the "data is encrypted" flag
+        response = client.post("/convert", content=bytes(data))
+        assert response.status_code == 422 and "password" in response.text
+
+
+def test_missing_path_is_404():
+    assert client.post("/convert", params={"path": "no-such-drawing.dwg"}).status_code == 404
+
+
 def test_rejects_truncated_dwg():
     fixture = Path(__file__).parent / "fixtures" / "entities_2018.dwg"
     assert client.post("/convert", content=fixture.read_bytes()[:5000]).status_code == 422

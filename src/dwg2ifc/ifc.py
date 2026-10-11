@@ -183,7 +183,9 @@ class _Builder:
             if layer.get("off") or layer.get("frozen"):
                 # AutoCAD does not show these, and IFC4X3 has no way to mark a layer as hidden
                 self.skipped["on a layer that is off or frozen"] += 1
-            elif not e["invisible"]:
+            elif e["invisible"]:
+                self.skipped["marked invisible"] += 1
+            else:
                 self.by_owner[e["owner"]].append(e)
         self.layer_items = defaultdict(list)
         self.maps: dict[int, object] = {}  # block handle -> IfcRepresentationMap, or None if empty
@@ -210,6 +212,10 @@ class _Builder:
             (f"Layout {n}", handle)
             for n, handle in enumerate((h for h, b in drawing.blocks.items() if b["name"].lower().startswith("*paper_space") and self.by_owner.get(h)), 1)
         ]  # fmt: skip
+        written = {handle for _, handle in spaces}
+        for handle, block in drawing.blocks.items():
+            if block["name"].lower().startswith("*paper_space") and handle not in written and self.by_owner.get(handle):
+                self.skipped["on a paper-space layout"] += len(self.by_owner[handle])
         # each space is written relative to this point; block definitions keep their own coordinates
         self.origin_shift = _far_origin([e for _, handle in spaces for e in self.by_owner[handle]], metres)
         self.shift = (0.0, 0.0, 0.0)

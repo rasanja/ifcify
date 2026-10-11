@@ -27,12 +27,15 @@ DWG releases R14, R2000, R2004, R2007, R2010, R2013 and R2018.
 
 A DWG holds lines on layers, not walls and rooms. The converter adds building information in three ways:
 
-- **Properties.** Every object carries its layer, entity type and colour. Block inserts carry their block name
-  and their attributes (door numbers, room data). Data attached by other programs is carried over too.
+- **Properties.** Every converted entity carries its layer, entity type, colour and linetype. Block inserts
+  carry their block name and their attributes (door numbers, room data). Data attached by other programs
+  is carried over too.
 - **Classes and types from names.** A layer or block whose name says what it is (`A-DOOR`, `Windows`,
   `PRTA0001`, `Fluorescent Fixture`) makes its solids and block inserts IFC doors, windows, light fixtures,
-  furniture and so on. Each named block becomes a type and its inserts occurrences of it.
-- **Elements derived from plans.** Room outlines become `IfcSpace` with a name and floor area. Pairs of
+  furniture and so on. A named block recognised this way becomes a type and its inserts occurrences of it;
+  blocks whose names are not recognised stay plain drafting, without a type.
+- **Elements derived from plans.** Room outlines become `IfcSpace` with a floor area, and a name when there
+  is text inside the outline. Pairs of
   parallel lines on wall layers become `IfcWall` with a thickness and a wall type; a gap with a door or window
   drawn in it becomes an opening in the wall, filled by an `IfcDoor` or `IfcWindow`. Closed shapes on column
   layers become `IfcColumn`. The original linework is kept alongside.
@@ -61,8 +64,8 @@ converter puts in fixed values:
 
 What this means in practice:
 
-- Everything measured in plan is real: lengths, widths, thicknesses, and floor areas, which are length
-  times width.
+- What is measured in plan comes from the drawing: lengths, widths, thicknesses and floor areas. See the
+  next section for what "measured" does and does not guarantee.
 - Only what involves the vertical direction is not: heights, volumes, and the area of a wall's face
   (its length times its assumed height). Do not take those out of the IFC.
 - Each derived element says so in its properties: `DWG_Derived.Height` or `DWG_Room.Height` reads
@@ -72,6 +75,51 @@ What this means in practice:
 - Some drawings do record a height, as the "thickness" of a line or the elevation it is drawn at. The
   converter does not use either yet, so even those drawings get the assumed values.
 
+### What to trust in a flat 2D drawing
+
+Nothing is assumed about plan geometry, but not everything in the output is exact, and some of it is a
+reading of the drawing rather than a fact in it.
+
+**Exact.** Positions and sizes of lines, arcs, circles, ellipses, polylines, points, splines with control
+points, solid fills, block placements (position, scale, rotation, mirroring), and text content and
+position. These are checked value for value against AutoCAD's own export of a test drawing, in each
+supported release. Layers, colours given as red-green-blue, line weights and linetype patterns are read
+directly from the file.
+
+**Exact only if the drawing declares its unit.** Coordinates are written in the drawing's own unit. Real
+sizes, and floor areas in square metres, depend on which unit that is. A drawing that declares none is
+taken as inches or millimetres according to its measurement setting, which is a guess; if it is wrong,
+every real-world size is wrong by the same factor.
+
+**Approximate.**
+
+- Room footprints: an outline with arcs is written with the arcs broken into short straight pieces. The
+  floor area reported for the room is computed from the true arcs and is exact.
+- Splines drawn through fit points are recomputed; end tangents and closed splines are not honoured.
+- Colours given as a palette number are converted by formula and were not checked against AutoCAD for
+  every number. "By block" colour and linetype take the layer's.
+- Text: the box around it is estimated from the character count, and fonts, width and alignment are not
+  carried over. Multiline text loses its inline formatting.
+- Dimensions saved without their drawn form are redrawn as plain lines and a number, without arrowheads
+  and without the drawing's unit format (a length shows as `144`, not `12'-0"`).
+
+**Present in the drawing but not carried over.**
+
+- The width of wide polylines; they come out as thin lines.
+- Hatch patterns; a hatch becomes a plain fill of its boundary, and holes rely on the order of its loops.
+- Linetype scale, and shapes or text inside a linetype.
+- The "thickness" (extrusion height) of 2D entities.
+
+**A reading, not a fact.** The derived elements are found by rules, and a rule can pick the wrong lines:
+
+- A wall is any two parallel lines on a wall layer that are 7 to 65 cm apart. The thickness is the true
+  distance between those two lines, but nothing guarantees they are the two faces of one wall.
+- A wall's length is the stretch along which its two lines run side by side. Corners are not joined, so
+  it is not the wall's length as an architect would give it, and lengths do not add up to a perimeter.
+- A door or window width is the gap in the wall lines, frame included.
+- A room's name is whatever short text with a digit lies inside its outline.
+- What something is (door, window, column) comes from layer and block names.
+
 Model space goes into one storey: `IfcProject > IfcSite > IfcBuilding > IfcBuildingStorey`. A drawing
 with nothing in model space, such as a title block, is exported as its paper-space layouts instead,
 one storey per layout.
@@ -79,11 +127,14 @@ one storey per layout.
 A drawing placed far from the origin, as survey drawings are, is written relative to a local origin so
 viewers can display it. Its real position is kept in the file as `IfcMapConversion`.
 
-Entities on layers that are switched off or frozen are left out, as AutoCAD hides them.
+Entities on layers that are switched off or frozen, and entities marked invisible, are left out, as
+AutoCAD hides them. Room outlines are the exception: they are read from hidden layers too, because
+offices often keep them there.
 
-Not converted yet: rays and construction lines, lights, custom entities that carry no picture of
-themselves, text fonts, and paper-space layouts of drawings that also have a model. Anything left out is counted in the
-`X-DWG-Skipped` response header, so nothing is dropped silently.
+Not converted: rays and construction lines, lights, custom entities that carry no picture of themselves,
+and paper-space layouts of drawings that also have a model. Every entity left out, for any of these
+reasons, is counted by reason in the `X-DWG-Skipped` response header. The properties listed above as not
+carried over are dropped without a count.
 
 ## Run with Docker
 
@@ -144,7 +195,7 @@ The response body is the IFC file (STEP text, `application/x-step`). Two headers
 | Header | Example | Meaning |
 |--------|---------|---------|
 | `X-DWG-Version` | `R2013` | DWG release of the input |
-| `X-DWG-Skipped` | `LIGHT=8` | Entities left out, counted by type. Empty when everything converted |
+| `X-DWG-Skipped` | `LIGHT=8` | Entities left out, counted by type or reason. Empty when none were |
 
 Add `-D -` to `curl` to see them.
 
@@ -169,9 +220,9 @@ Path("drawing.ifc").write_text(ifc_text)
 ## Limits
 
 - There is a size limit but no time limit on a conversion; run it on a trusted machine.
-- Password-protected drawings are rejected; they are out of scope.
+- Password-protected drawings are rejected with a 422; they are out of scope.
 - DWG R13 uses the R14 code path and is untested.
-- Solids saved in R2004 or earlier lose their rounded (filleted) faces; the rest of the solid converts.
+- Solids in drawings saved as R2000 or R14 lose their rounded (filleted) faces; the rest of the solid converts.
 - IFC4X3 has no cone surface, so cone faces are written as surfaces of revolution. Viewer support for that varies.
 - Text is positioned and sized, but fonts and exact alignment are not carried over.
 

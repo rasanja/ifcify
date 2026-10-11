@@ -120,10 +120,11 @@ def test_title_block_drawings_export_their_layouts():
 
 
 def test_no_sample_reports_unconverted_drawing_entities():
-    # across all samples only lights (nothing to draw) and hidden layers may be reported
+    # across all samples only lights (nothing to draw) and things AutoCAD itself would not show in the model
+    allowed = {"LIGHT", "on a layer that is off or frozen", "marked invisible", "on a paper-space layout"}
     for sample in ASSETS.glob("*.dwg"):
         skipped = convert(sample.read_bytes())[1]
-        assert set(skipped) <= {"LIGHT", "on a layer that is off or frozen"}, sample.name
+        assert set(skipped) <= allowed, sample.name
 
 
 def test_floor_plan_rooms_become_spaces():

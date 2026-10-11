@@ -109,8 +109,6 @@ def _system_page(data: bytes, addr: int, kind: int) -> bytes:
 
 
 def _sections_r2004(data: bytes) -> dict[str, bytes]:
-    if struct.unpack_from("<I", data, 0x18)[0] & 1:
-        raise ValueError("password-protected DWG files are not supported")
     hdr = bytes(a ^ b for a, b in zip(data[0x80:0xEC], _HEADER_KEY))
     if hdr[:11] != b"AcFssFcAJMB":
         raise ValueError("corrupt DWG file header")
@@ -331,6 +329,9 @@ def sections(data: bytes) -> dict[str, bytes]:
     """Named, decompressed sections of the file, e.g. 'AcDb:AcDbObjects'."""
     release = version(data)
     try:
+        # security flags, same place from R2004 on: 1 encrypts the data, 2 the properties
+        if since(release, "R2004") and struct.unpack_from("<I", data, 0x18)[0] & 3:
+            raise ValueError("password-protected DWG files are not supported")
         if release in _R2004_CONTAINER:
             return _sections_r2004(data)
         if release == "R2007":
