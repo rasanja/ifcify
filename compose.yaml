@@ -1,0 +1,9 @@
+services:
+  dwg2ifc:
+    build: .
+    image: dwg2ifc
+    ports:
+      - "127.0.0.1:8000:8000" # reachable from this machine only
+    volumes:
+      - ./drawings:/data:ro # drawings that ?path= may refer to
+    restart: unless-stopped

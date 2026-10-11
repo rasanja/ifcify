@@ -83,4 +83,5 @@ async def convert_dwg(
 
 
 def main() -> None:
-    uvicorn.run(app, host="127.0.0.1", port=int(os.environ.get("DWG2IFC_PORT", "8000")))
+    # localhost unless told otherwise; the container image sets DWG2IFC_HOST=0.0.0.0
+    uvicorn.run(app, host=os.environ.get("DWG2IFC_HOST", "127.0.0.1"), port=int(os.environ.get("DWG2IFC_PORT", "8000")))

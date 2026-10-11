@@ -19,6 +19,7 @@ DWG releases R14, R2000, R2004, R2007, R2010, R2013 and R2018.
 | Meshes, polyface meshes, 3D faces | `IfcPolygonalFaceSet` |
 | Multileaders, wipeouts and custom entities | drawn from the picture of themselves they carry, when they have one |
 | Layers | `IfcPresentationLayerAssignment` |
+| Colours and line weights | `IfcStyledItem` with curve, fill or surface styles |
 | Drawing units | IFC length unit |
 
 Everything goes into one storey: `IfcProject > IfcSite > IfcBuilding > IfcBuildingStorey`.
@@ -26,11 +27,26 @@ Everything goes into one storey: `IfcProject > IfcSite > IfcBuilding > IfcBuildi
 A drawing placed far from the origin, as survey drawings are, is written relative to a local origin so
 viewers can display it. Its real position is kept in the file as `IfcMapConversion`.
 
+Entities on layers that are switched off or frozen are left out, as AutoCAD hides them.
+
 Not converted yet: rays and construction lines, lights, custom entities that carry no picture of
-themselves, colours and line weights, and paper space. Anything left out is counted in the
+themselves, linetypes, text fonts, and paper space. Anything left out is counted in the
 `X-DWG-Skipped` response header, so nothing is dropped silently.
 
-## Install
+## Run with Docker
+
+```sh
+docker compose up
+```
+
+That builds the image on first use (this step needs the network; running does not) and serves on
+http://127.0.0.1:8000, reachable from your machine only. API docs are at http://127.0.0.1:8000/docs.
+
+Put drawings in `./drawings` to refer to them with `?path=`; the folder is mounted read-only. Sending
+the drawing in the request body needs no setup. Stop with `Ctrl+C`, or run `docker compose up -d` and
+`docker compose down`.
+
+## Install without Docker
 
 Needs Python 3.12 or newer and [uv](https://docs.astral.sh/uv/).
 
@@ -49,6 +65,7 @@ and work offline.
 
 | Environment variable | Default | Meaning |
 |----------------------|---------|---------|
+| `DWG2IFC_HOST` | `127.0.0.1` | Address to listen on. The Docker image sets `0.0.0.0` |
 | `DWG2IFC_PORT` | `8000` | Port to listen on |
 | `DWG2IFC_ROOT` | current directory | Directory that `?path=` references are read from |
 
