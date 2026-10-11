@@ -33,10 +33,11 @@ A DWG holds lines on layers, not walls and rooms. The converter adds building in
   `PRTA0001`, `Fluorescent Fixture`) makes its solids and block inserts IFC doors, windows, light fixtures,
   furniture and so on. Each named block becomes a type and its inserts occurrences of it.
 - **Elements derived from plans.** Room outlines become `IfcSpace` with a name and floor area. Pairs of
-  parallel lines on wall layers become `IfcWall` with a thickness and a wall type. Closed shapes on column
+  parallel lines on wall layers become `IfcWall` with a thickness and a wall type; a gap with a door or window
+  drawn in it becomes an opening in the wall, filled by an `IfcDoor` or `IfcWindow`. Closed shapes on column
   layers become `IfcColumn`. The original linework is kept alongside.
 
-Derived elements are an interpretation and are marked as such. Their height is an assumed 3 m, because a plan
+Derived elements are an interpretation and are marked as such. Heights are assumed (walls and rooms 3 m, doors 2.1 m), because a plan
 does not give one. Recognition depends on layer and block naming, so a drawing with meaningless names
 produces drafting and generic objects only. Import into Revit has not been tested.
 

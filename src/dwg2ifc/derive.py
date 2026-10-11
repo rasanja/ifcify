@@ -150,7 +150,8 @@ def walls(drawing, owner, wanted, thinnest: float, thickest: float, shortest: fl
     the faces of a wall for as far as they run side by side, if that is further than `shortest` and than
     the wall is thick. Each face is used once per side, nearest
     partner first, so a line between two others makes two walls rather than three.
-    Returns centre lines with a thickness: {"start", "end", "thickness", "layer"}.
+    Returns centre lines with a thickness: {"start", "end", "thickness", "layer"}, plus where each lies in
+    its group's own axes ("frame": origin and direction; "a", "b" along it; "across") for `join`.
     """
     buckets = {}
     for x1, y1, x2, y2, layer in _segments(drawing, owner, wanted):
@@ -195,7 +196,48 @@ def walls(drawing, owner, wanted, thinnest: float, thickest: float, shortest: fl
                     "end": (ox + b * ux - middle * uy, oy + b * uy + middle * ux),
                     "thickness": gap,
                     "layer": low["layer"],
+                    "frame": (ox, oy, ux, uy), "a": a, "b": b, "across": middle,
                 })  # fmt: skip
+    return out
+
+
+def join(pieces: list[dict], evidence: list, tolerance: float, widest: float) -> list[dict]:
+    """Walls joined across the gaps a plan leaves for doors and windows.
+
+    Pieces on one line with one thickness are one wall where the gap between them is negligible, or
+    holds a sign of a door or window. `evidence` is [(x, y, what)]: a point of something drawn on a
+    door or window layer, or the insertion point of a door or window block. Each returned wall has
+    "openings": [(distance from its start, width, what)].
+    """
+    lines = {}
+    for piece in pieces:
+        key = (piece["frame"], round(piece["across"] / tolerance), round(piece["thickness"] / tolerance))
+        lines.setdefault(key, []).append(piece)
+    out = []
+    for (frame, _, _), group in lines.items():
+        ox, oy, ux, uy = frame
+        group.sort(key=lambda p: p["a"])
+        near = []  # evidence in this line's axes, close enough across to be in the wall
+        reach = group[0]["thickness"] / 2 + 2 * tolerance
+        for x, y, what in evidence:
+            if abs(-(x - ox) * uy + (y - oy) * ux - group[0]["across"]) <= reach:
+                near.append(((x - ox) * ux + (y - oy) * uy, what))
+        wall = dict(group[0], openings=[])
+        for piece in group[1:]:
+            gap = piece["a"] - wall["b"]
+            found = next((what for along, what in near if wall["b"] - tolerance <= along <= piece["a"] + tolerance), None)
+            if gap <= tolerance or (gap <= widest and found is not None):
+                if gap > tolerance:
+                    wall["openings"].append((wall["b"] - wall["a"], gap, found))
+                wall["b"] = piece["b"]
+                continue
+            out.append(wall)
+            wall = dict(piece, openings=[])
+        out.append(wall)
+    for wall in out:
+        ox, oy, ux, uy = wall["frame"]
+        wall["start"] = (ox + wall["a"] * ux - wall["across"] * uy, oy + wall["a"] * uy + wall["across"] * ux)
+        wall["end"] = (ox + wall["b"] * ux - wall["across"] * uy, oy + wall["b"] * uy + wall["across"] * ux)
     return out
 
 

@@ -191,6 +191,7 @@ class _Builder:
         self.values: dict[tuple, object] = {}  # (name, value) -> shared IfcPropertySingleValue
         self.types: dict[tuple, object] = {}  # (block handle, IFC class) -> its IfcTypeProduct
         self.typed = defaultdict(list)  # type entity -> occurrences
+        self.by_handle: dict[int, object] = {}  # DWG handle -> the product written for it
         self.described = defaultdict(list)  # (layer, entity type, colour) -> products with those properties
         self.attributes = defaultdict(list)  # insert handle -> [(tag, value)] from its block attributes
         for e in drawing.entities:
@@ -274,6 +275,7 @@ class _Builder:
                     Representation=f.createIfcProductDefinitionShape(None, None, [representation]),
                 )
                 products.append(product)
+                self.by_handle[e["handle"]] = product
                 self.describe(e, product)
                 self.give_type(e, product, items)
             if products:
@@ -383,10 +385,21 @@ class _Builder:
         height = 3.0 / self.metres  # shortcut: a plan does not say how high its walls are
         shift = self.origin_shift
         wanted = lambda name: classify(name) == "IfcWall" and is_plan(name)  # noqa: E731
+        layer_name = lambda wall: self.d.layers.get(wall["layer"], {}).get("name", "")  # noqa: E731
         by_thickness = defaultdict(list)
         made = []
         # 7 to 65 cm thick and at least 30 cm long: thinner pairs are frames and glazing, shorter ones jambs
-        for wall in derive.walls(self.d, owner, wanted, 0.07 / self.metres, 0.65 / self.metres, 0.3 / self.metres):
+        pieces = derive.walls(self.d, owner, wanted, 0.07 / self.metres, 0.65 / self.metres, 0.3 / self.metres)
+        # anything drawn for a door or a window marks the gap it sits in as an opening rather than the end of a wall
+        evidence = []
+        for e in self.by_owner.get(owner, []):
+            block = self.d.blocks.get(e.get("block"), {}).get("name", "") if e["type"] == "INSERT" else ""
+            kind = classify(block, self.d.layers.get(e["layer"], {}).get("name", ""))
+            if kind in ("IfcDoor", "IfcWindow") and e.get("extrusion", _Z) == _Z:
+                points = [e[k] for k in ("point", "start", "end", "center") if k in e] + list(e.get("points", ())[:1])
+                evidence += [(p[0], p[1], (kind, e["handle"])) for p in points]
+        used = set()
+        for wall in derive.join(pieces, evidence, 0.02 / self.metres, 4.0 / self.metres):
             (x1, y1), (x2, y2) = wall["start"], wall["end"]
             length = math.hypot(x2 - x1, y2 - y1)
             along = ((x2 - x1) / length, (y2 - y1) / length, 0.0)
@@ -417,6 +430,35 @@ class _Builder:
                 ),
             )
             by_thickness[millimetres].append((product, thickness))
+            for distance, width, (kind, handle) in wall["openings"]:
+                # shortcut: a plan gives an opening's width only; a door is taken as 2.1 m high, a window as 1.2 m at 0.9 m
+                sill, tall = ((0.0, 2.1) if kind == "IfcDoor" else (0.9, 1.2))
+                sill, tall = sill / self.metres, tall / self.metres
+
+                def box(depth, width=width, tall=tall):
+                    solid = f.createIfcExtrudedAreaSolid(f.createIfcRectangleProfileDef("AREA", None, None, width, depth), None, self.direction(_Z), tall)
+                    return f.createIfcProductDefinitionShape(None, None, [f.createIfcShapeRepresentation(self.body_context, "Body", "SweptSolid", [solid])])
+
+                def in_wall(distance=distance, width=width, sill=sill, product=product):
+                    at = f.createIfcAxis2Placement3D(f.createIfcCartesianPoint((distance + width / 2, 0.0, sill)))
+                    return f.createIfcLocalPlacement(product.ObjectPlacement, at)
+
+                opening = f.create_entity(
+                    "IfcOpeningElement", GlobalId=ifcopenshell.guid.new(), Name="Opening", ObjectPlacement=in_wall(),
+                    Representation=box(thickness), PredefinedType="OPENING",
+                )  # fmt: skip
+                f.createIfcRelVoidsElement(ifcopenshell.guid.new(), None, None, None, product, opening)
+                filler = self.by_handle.get(handle)
+                if filler is None or not filler.is_a(kind) or handle in used:
+                    filler = f.create_entity(
+                        kind, GlobalId=ifcopenshell.guid.new(), Name=kind[3:], ObjectType="derived from plan linework",
+                        ObjectPlacement=in_wall(), Representation=box(0.05 / self.metres),
+                    )  # fmt: skip
+                    made.append(filler)
+                    self.described[layer_name(wall), f"derived {kind[3:].lower()}", "by layer", "by layer"].append(filler)
+                used.add(handle)
+                filler.OverallWidth, filler.OverallHeight = width, tall
+                f.createIfcRelFillsElement(ifcopenshell.guid.new(), None, None, None, opening, filler)
             layer = self.d.layers.get(wall["layer"], {}).get("name", "")
             self.described[layer, "derived wall", "by layer", "by layer"].append(product)
             made.append(product)
@@ -425,8 +467,8 @@ class _Builder:
         f.createIfcRelContainedInSpatialStructure(ifcopenshell.guid.new(), None, None, None, made, storey)
         self.property_set(
             "DWG_Derived",
-            {"Source": "two parallel lines on a wall layer, taken as the faces of a wall",
-             "Height": "assumed 3 m; the drawing does not give one"},
+            {"Source": "two parallel lines on a wall layer, taken as the faces of a wall; gaps that hold a door or window are openings",
+             "Height": "assumed: walls 3 m, doors 2.1 m, windows 1.2 m at 0.9 m; the drawing does not give them"},
             made,
         )  # fmt: skip
         material = f.createIfcMaterial("Unspecified", None, None)

@@ -125,3 +125,36 @@ def test_columns_come_from_closed_shapes_on_column_layers():
     assert profiles == ["IfcArbitraryClosedProfileDef", "IfcCircleProfileDef"]
     assert all(c.Representation.Representations[0].Items[0].Depth == 3.0 for c in columns)
     assert model.by_type("IfcBuildingStorey")[0].Elevation == 0.0
+
+
+def wall_with_a_door() -> Drawing:
+    """A 0.2 m wall along x from 0 to 5 m, broken between 2.0 and 2.9 m, with a door swing drawn in the gap."""
+    d = plan()
+    d.layers[14] = {"name": "A-DOOR", "color": 7}
+    common = {"owner": 1, "invisible": 0, "color": None, "lineweight": 29, "layer": 12, "extrusion": Z}
+    lines = [((0.0, y), (2.0, y)) for y in (0.0, 0.2)] + [((2.9, y), (5.0, y)) for y in (0.0, 0.2)]
+    d.entities = [common | {"type": "LINE", "handle": 700 + i, "start": (*p, 0.0), "end": (*q, 0.0)} for i, (p, q) in enumerate(lines)]
+    d.entities.append(common | {"type": "ARC", "handle": 710, "layer": 14, "center": (2.0, 0.2, 0.0), "radius": 0.9,
+                                "start_angle": 0.0, "end_angle": 1.57})  # fmt: skip
+    return d
+
+
+def test_a_gap_with_a_door_in_it_is_an_opening_not_two_walls():
+    model, _ = ifc.build(wall_with_a_door(), "door")
+    (wall,) = model.by_type("IfcWall")
+    assert wall.Representation.Representations[0].Items[0].SweptArea.XDim == 5.0
+    (opening,) = model.by_type("IfcOpeningElement")
+    assert opening.VoidsElements[0].RelatingBuildingElement == wall
+    assert round(opening.Representation.Representations[0].Items[0].SweptArea.XDim, 6) == 0.9
+    (door,) = model.by_type("IfcDoor")
+    assert opening.HasFillings[0].RelatedBuildingElement == door
+    assert (round(door.OverallWidth, 6), door.OverallHeight) == (0.9, 2.1)
+    # the opening sits 2.0 m along the wall, so its middle is at 2.45 m
+    assert round(opening.ObjectPlacement.RelativePlacement.Location.Coordinates[0], 6) == 2.45
+
+
+def test_a_gap_with_nothing_in_it_stays_a_gap():
+    d = wall_with_a_door()
+    d.entities = [e for e in d.entities if e["type"] != "ARC"]
+    model, _ = ifc.build(d, "gap")
+    assert len(model.by_type("IfcWall")) == 2 and not model.by_type("IfcOpeningElement")
