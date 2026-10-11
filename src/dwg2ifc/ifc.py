@@ -19,7 +19,7 @@ import ifcopenshell.api.unit
 import ifcopenshell.guid
 
 from dwg2ifc import derive
-from dwg2ifc.classify import classify
+from dwg2ifc.classify import classify, is_plan
 from dwg2ifc.entities import Drawing, bspline_points, fit_spline
 
 # DWG INSUNITS code -> (SI prefix, None) or (None, conversion unit name)
@@ -232,6 +232,9 @@ class _Builder:
         self.footprint_context = ifcopenshell.api.context.add_context(
             f, context_type="Model", context_identifier="FootPrint", target_view="MODEL_VIEW", parent=model
         )
+        self.axis_context = ifcopenshell.api.context.add_context(
+            f, context_type="Model", context_identifier="Axis", target_view="GRAPH_VIEW", parent=model
+        )
         self.origin = f.createIfcAxis2Placement3D(f.createIfcCartesianPoint((0.0, 0.0, 0.0)))
         self.identity = f.createIfcCartesianTransformationOperator3D(None, None, self.origin.Location)
 
@@ -276,6 +279,7 @@ class _Builder:
                 f.createIfcRelContainedInSpatialStructure(ifcopenshell.guid.new(), None, None, None, products, storey)
             if handle == model_space:
                 self.spaces(storey, handle)
+                self.walls(storey, handle)
         for kind, occurrences in self.typed.items():
             f.createIfcRelDefinesByType(ifcopenshell.guid.new(), None, None, None, occurrences, kind)
         for (layer, kind, colour), described in self.described.items():
@@ -366,6 +370,74 @@ class _Builder:
             made.append(space)
         if made:
             f.createIfcRelAggregates(ifcopenshell.guid.new(), None, None, None, storey, made)
+
+    def walls(self, storey, owner) -> None:
+        """Walls read from pairs of parallel lines on wall layers, as IfcWall: an axis and a box of assumed height.
+
+        Laid out the standard way (placed at the start of the axis, a rectangle extruded upwards, a material
+        layer of the wall's thickness, a type per thickness) so that tools can treat them as real walls.
+        """
+        f = self.f
+        height = 3.0 / self.metres  # shortcut: a plan does not say how high its walls are
+        shift = self.origin_shift
+        wanted = lambda name: classify(name) == "IfcWall" and is_plan(name)  # noqa: E731
+        by_thickness = defaultdict(list)
+        made = []
+        # 7 to 65 cm thick and at least 30 cm long: thinner pairs are frames and glazing, shorter ones jambs
+        for wall in derive.walls(self.d, owner, wanted, 0.07 / self.metres, 0.65 / self.metres, 0.3 / self.metres):
+            (x1, y1), (x2, y2) = wall["start"], wall["end"]
+            length = math.hypot(x2 - x1, y2 - y1)
+            along = ((x2 - x1) / length, (y2 - y1) / length, 0.0)
+            thickness = wall["thickness"]
+            millimetres = round(thickness * self.metres * 1000)  # walls that agree to the millimetre share a type
+            start = f.createIfcAxis2Placement3D(
+                f.createIfcCartesianPoint((float(x1 - shift[0]), float(y1 - shift[1]), float(-shift[2]))), self.direction(_Z), self.direction(along)
+            )
+            axis = f.createIfcPolyline([f.createIfcCartesianPoint((0.0, 0.0)), f.createIfcCartesianPoint((length, 0.0))])
+            middle = f.createIfcAxis2Placement2D(f.createIfcCartesianPoint((length / 2, 0.0)))
+            box = f.createIfcExtrudedAreaSolid(
+                f.createIfcRectangleProfileDef("AREA", None, middle, length, thickness), None, self.direction(_Z), height
+            )
+            product = f.create_entity(
+                "IfcWall",
+                GlobalId=ifcopenshell.guid.new(),
+                Name=f"Wall {millimetres} mm",
+                ObjectType="derived from plan linework",
+                ObjectPlacement=f.createIfcLocalPlacement(storey.ObjectPlacement, start),
+                Representation=f.createIfcProductDefinitionShape(
+                    None,
+                    None,
+                    [
+                        # body first: some readers draw whichever representation is listed first
+                        f.createIfcShapeRepresentation(self.body_context, "Body", "SweptSolid", [box]),
+                        f.createIfcShapeRepresentation(self.axis_context, "Axis", "Curve2D", [axis]),
+                    ],
+                ),
+            )
+            by_thickness[millimetres].append((product, thickness))
+            layer = self.d.layers.get(wall["layer"], {}).get("name", "")
+            self.described[layer, "derived wall", "by layer"].append(product)
+            made.append(product)
+        if not made:
+            return
+        f.createIfcRelContainedInSpatialStructure(ifcopenshell.guid.new(), None, None, None, made, storey)
+        self.property_set(
+            "DWG_Derived",
+            {"Source": "two parallel lines on a wall layer, taken as the faces of a wall",
+             "Height": "assumed 3 m; the drawing does not give one"},
+            made,
+        )  # fmt: skip
+        material = f.createIfcMaterial("Unspecified", None, None)
+        for millimetres, group in by_thickness.items():
+            name = f"Wall {millimetres} mm"
+            occurrences, thickness = [product for product, _ in group], group[0][1]
+            kind = ifcopenshell.api.root.create_entity(f, ifc_class="IfcWallType", name=name)
+            f.createIfcRelDefinesByType(ifcopenshell.guid.new(), None, None, None, occurrences, kind)
+            layers = f.createIfcMaterialLayerSet([f.createIfcMaterialLayer(material, thickness, None)], name, None)
+            f.createIfcRelAssociatesMaterial(ifcopenshell.guid.new(), None, None, None, [kind], layers)
+            # the layer set is centred on the axis
+            usage = f.createIfcMaterialLayerSetUsage(layers, "AXIS2", "POSITIVE", -thickness / 2, None)
+            f.createIfcRelAssociatesMaterial(ifcopenshell.guid.new(), None, None, None, occurrences, usage)
 
     def element_class(self, e, items) -> str:
         """Solids and meshes are things in the model, and so is a block whose name or layer says what it is.

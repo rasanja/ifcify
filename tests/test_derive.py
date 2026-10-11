@@ -59,3 +59,49 @@ def test_bulged_outline_area():
     # a circle of radius 1 drawn as two half-circle bulges
     outline = derive._outline([(1.0, 0.0), (-1.0, 0.0)], [1.0, 1.0])
     assert abs(abs(derive.area(outline)) - 3.14159) < 0.05
+
+
+def double_line_room() -> Drawing:
+    """A 4 x 3 m room drawn the usual way: an outer and an inner rectangle 0.2 m apart, on a wall layer."""
+    d = plan()
+    common = {"owner": 1, "invisible": 0, "color": None, "lineweight": 29, "layer": 12, "extrusion": Z}
+
+    def rectangle(handle, x1, y1, x2, y2):
+        corners = [(x1, y1), (x2, y1), (x2, y2), (x1, y2)]
+        return [common | {"type": "LINE", "handle": handle + i, "start": (*p, 0.0), "end": (*q, 0.0)}
+                for i, (p, q) in enumerate(zip(corners, corners[1:] + corners[:1]))]  # fmt: skip
+
+    far = common | {"type": "LINE", "handle": 399, "start": (-0.2, 5.0, 0.0), "end": (4.2, 5.0, 0.0)}  # 2 m away: no wall
+    d.entities = rectangle(300, -0.2, -0.2, 4.2, 3.2) + rectangle(310, 0.0, 0.0, 4.0, 3.0) + [far]
+    return d
+
+
+def test_walls_come_from_parallel_line_pairs():
+    walls = derive.walls(double_line_room(), 1, lambda name: name == "A-WALL", thinnest=0.04, thickest=0.65)
+    assert sorted((round(w["thickness"], 6), round(__import__("math").dist(w["start"], w["end"]), 6)) for w in walls) == [
+        (0.2, 3.0), (0.2, 3.0), (0.2, 4.0), (0.2, 4.0),
+    ]  # fmt: skip
+    south = next(w for w in walls if w["start"][1] == w["end"][1] and w["start"][1] < 0)
+    assert south["start"][1] == -0.1  # the centre line, halfway between the two faces
+
+
+def test_a_line_between_two_others_makes_two_walls():
+    d = double_line_room()
+    d.entities = [e | {"start": (0.0, y, 0.0), "end": (5.0, y, 0.0), "handle": 500 + i} for i, y in enumerate((0.0, 0.1, 0.3)) for e in d.entities[:1]]
+    walls = derive.walls(d, 1, lambda name: True, thinnest=0.04, thickest=0.65)
+    assert sorted(round(w["thickness"], 6) for w in walls) == [0.1, 0.2]
+
+
+def test_walls_become_ifc_walls_with_types():
+    model, _ = ifc.build(double_line_room(), "room")
+    walls = model.by_type("IfcWall")
+    assert len(walls) == 4
+    kind = model.by_type("IfcWallType")[0]
+    assert kind.Name == "Wall 200 mm" and set(kind.Types[0].RelatedObjects) == set(walls)
+    wall = walls[0]
+    body, axis = wall.Representation.Representations
+    assert (axis.RepresentationIdentifier, body.RepresentationType) == ("Axis", "SweptSolid")
+    box = body.Items[0]
+    assert (box.SweptArea.YDim, box.Depth) == (0.2, 3.0) and box.SweptArea.XDim in (3.0, 4.0)
+    usage = ifcopenshell.util.element.get_material(wall)
+    assert usage.is_a("IfcMaterialLayerSetUsage") and usage.ForLayerSet.MaterialLayers[0].LayerThickness == 0.2

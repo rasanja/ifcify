@@ -113,3 +113,87 @@ def spaces(drawing, owner, smallest: float) -> list[dict]:
         named.add(key)
         rooms.append(room)
     return rooms
+
+
+def _segments(drawing, owner, wanted) -> list:
+    """Straight pieces of the visible linework on the wanted layers: (x1, y1, x2, y2, layer handle)."""
+    out = []
+    for e in drawing.entities:
+        layer = drawing.layers.get(e["layer"], {})
+        if e["owner"] != owner or e["invisible"] or layer.get("off") or layer.get("frozen") or not wanted(layer.get("name", "")):
+            continue
+        if e.get("extrusion", _Z) != _Z:
+            continue
+        if e["type"] == "LINE":
+            out.append((*e["start"][:2], *e["end"][:2], e["layer"]))
+        elif e["type"] in ("LWPOLYLINE", "POLYLINE_2D"):
+            points = [p[:2] for p in e["points"]]
+            pairs = zip(points, points[1:] + points[:1]) if e["closed"] else zip(points, points[1:])
+            for i, (p, q) in enumerate(pairs):
+                if not (e["bulges"][i] if i < len(e["bulges"]) else 0.0):
+                    out.append((*p, *q, e["layer"]))
+    return out
+
+
+def _uncovered(start, end, covered) -> list:
+    """The parts of [start, end] not inside any of the covered intervals."""
+    out = [(start, end)]
+    for a, b in covered:
+        out = [piece for s, e in out for piece in ((s, min(e, a)), (max(s, b), e)) if piece[1] > piece[0]]
+    return out
+
+
+def walls(drawing, owner, wanted, thinnest: float, thickest: float, shortest: float = 0.0) -> list[dict]:
+    """Walls, read from the two parallel lines a plan draws for each one.
+
+    Two lines on a wall layer that run parallel, between `thinnest` and `thickest` apart, are taken as
+    the faces of a wall for as far as they run side by side, if that is further than `shortest` and than
+    the wall is thick. Each face is used once per side, nearest
+    partner first, so a line between two others makes two walls rather than three.
+    Returns centre lines with a thickness: {"start", "end", "thickness", "layer"}.
+    """
+    buckets = {}
+    for x1, y1, x2, y2, layer in _segments(drawing, owner, wanted):
+        length = math.hypot(x2 - x1, y2 - y1)
+        if length < thinnest:
+            continue
+        angle = math.atan2(y2 - y1, x2 - x1) % math.pi
+        key = round(math.degrees(angle) * 2) % 360  # half-degree bins; 0 and 180 degrees are the same direction
+        buckets.setdefault(key, []).append((x1, y1, x2, y2, layer))
+
+    out = []
+    for lines in buckets.values():
+        # measure along and across the first line's direction, from its start, so far-away drawings keep precision
+        ox, oy, x2, y2, _ = lines[0]
+        length = math.hypot(x2 - ox, y2 - oy)
+        ux, uy = (x2 - ox) / length, (y2 - oy) / length
+        faces = []
+        for x1, y1, x2, y2, layer in lines:
+            a, b = sorted(((x1 - ox) * ux + (y1 - oy) * uy, (x2 - ox) * ux + (y2 - oy) * uy))
+            across = (-(x1 - ox) * uy + (y1 - oy) * ux - (x2 - ox) * uy + (y2 - oy) * ux) / 2
+            faces.append({"across": across, "a": a, "b": b, "layer": layer, "above": [], "below": []})
+        faces.sort(key=lambda f: f["across"])
+        candidates = []
+        for i, low in enumerate(faces):
+            for high in faces[i + 1 :]:
+                gap = high["across"] - low["across"]
+                if gap > thickest:
+                    break
+                if gap >= thinnest and min(low["b"], high["b"]) - max(low["a"], high["a"]) > gap:
+                    candidates.append((gap, low, high))
+        candidates.sort(key=lambda c: c[0])
+        for gap, low, high in candidates:
+            start, end = max(low["a"], high["a"]), min(low["b"], high["b"])
+            for a, b in _uncovered(start, end, low["above"] + high["below"]):
+                if b - a <= max(gap, shortest):
+                    continue  # shorter than it is thick: a jamb or a corner, not a wall
+                low["above"].append((a, b))
+                high["below"].append((a, b))
+                middle = low["across"] + gap / 2
+                out.append({
+                    "start": (ox + a * ux - middle * uy, oy + a * uy + middle * ux),
+                    "end": (ox + b * ux - middle * uy, oy + b * uy + middle * ux),
+                    "thickness": gap,
+                    "layer": low["layer"],
+                })  # fmt: skip
+    return out

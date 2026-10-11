@@ -35,6 +35,14 @@ _COMPILED = [
 _PLAIN = str.maketrans("áàâäãéèêëíìîïóòôöõúùûüýðþæøåñç", "aaaaaeeeeiiiiooooouuuuydtaoanc")
 
 
+# drawings of a building seen from the side: their "wall" lines are not walls in plan
+_NOT_PLAN = re.compile(r"section|elev|detail|schnitt|ansicht|corte|alzado|coupe|snid|utlit")
+
+
+def is_plan(name: str) -> bool:
+    return not _NOT_PLAN.search((name or "").lower())
+
+
 def classify(*names: str) -> str | None:
     """The IFC element class the first recognisable name stands for, or None."""
     for name in names:

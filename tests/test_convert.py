@@ -134,3 +134,14 @@ def test_floor_plan_rooms_become_spaces():
     # the drawing labels this room "405 SF"
     assert abs(psets["Qto_SpaceBaseQuantities"]["NetFloorArea"] / 0.3048**2 - 405) < 1
     assert "405 SF" in psets["DWG_Room"]["Labels"]
+
+
+def test_plan_walls_become_ifc_walls():
+    sample = ASSETS / "architectural_example-imperial.dwg"
+    if not sample.exists():
+        pytest.skip("sample not present")
+    model = ifcopenshell.file.from_string(convert(sample.read_bytes())[0])
+    # the drawing's own parameter says bldWALL=6": every wall is 6 inches, 152 mm, thick
+    assert [t.Name for t in model.by_type("IfcWallType")] == ["Wall 152 mm"]
+    assert len(model.by_type("IfcWall")) == 14
+    assert {round(w.Representation.Representations[0].Items[0].SweptArea.YDim, 6) for w in model.by_type("IfcWall")} == {6.0}
