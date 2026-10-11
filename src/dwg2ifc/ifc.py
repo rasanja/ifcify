@@ -33,29 +33,39 @@ _FAR = 10_000.0
 
 # line weight codes -> hundredths of a millimetre; 29 by layer, 30 by block, 31 default
 _LINEWEIGHTS = (0, 5, 9, 13, 15, 18, 20, 25, 30, 35, 40, 50, 53, 60, 70, 80, 90, 100, 106, 120, 140, 158, 200, 211)
-_SHADES = (1.0, 0.8, 0.6, 0.5, 0.3)
-_FIRST_COLORS = {1: (255, 0, 0), 2: (255, 255, 0), 3: (0, 255, 0), 4: (0, 255, 255), 5: (0, 0, 255), 6: (255, 0, 255),
-                 7: (0, 0, 0), 8: (65, 65, 65), 9: (128, 128, 128)}  # fmt: skip
-_GREYS = ((51, 51, 51), (80, 80, 80), (105, 105, 105), (130, 130, 130), (190, 190, 190), (255, 255, 255))
+# AutoCAD's colour index, 256 red-green-blue triples, as shipped in its own libraries (the default
+# colour map in libwhiptk_wt.dylib of AutoCAD 2027). Index 0 is "by block" and 256 "by layer".
+_PALETTE = bytes.fromhex(
+    "000000ff0000ffff0000ff0000ffff0000ffff00ffffffff808080c0c0c0ff0000ff7f7fcc0000cc6666990000994c4c"
+    "7f00007f3f3f4c00004c2626ff3f00ff9f7fcc3300cc7f66992600995f4c7f1f007f4f3f4c13004c2f26ff7f00ffbf7f"
+    "cc6600cc9966994c0099724c7f3f007f5f3f4c26004c3926ffbf00ffdf7fcc9900ccb26699720099854c7f5f007f6f3f"
+    "4c39004c4226ffff00ffff7fcccc00cccc6699990099994c7f7f007f7f3f4c4c004c4c26bfff00dfff7f99cc00b2cc66"
+    "72990085994c5f7f006f7f3f394c00424c267fff00bfff7f66cc0099cc664c990072994c3f7f005f7f3f264c00394c26"
+    "3fff009fff7f33cc007fcc662699005f994c1f7f004f7f3f134c002f4c2600ff007fff7f00cc0066cc660099004c994c"
+    "007f003f7f3f004c00264c2600ff3f7fff9f00cc3366cc7f0099264c995f007f1f3f7f4f004c13264c2f00ff7f7fffbf"
+    "00cc6666cc9900994c4c9972007f3f3f7f5f004c26264c3900ffbf7fffdf00cc9966ccb20099724c9985007f5f3f7f6f"
+    "004c39264c4200ffff7fffff00cccc66cccc0099994c9999007f7f3f7f7f004c4c264c4c00bfff7fdfff0099cc66b2cc"
+    "0072994c8599005f7f3f6f7f00394c26424c007fff7fbfff0066cc6699cc004c994c7299003f7f3f5f7f00264c26394c"
+    "003fff7f9fff0033cc667fcc0026994c5f99001f7f3f4f7f00134c262f4c0000ff7f7fff0000cc6666cc0000994c4c99"
+    "00007f3f3f7f00004c26264c3f00ff9f7fff3300cc7f66cc2600995f4c991f007f4f3f7f13004c2f264c7f00ffbf7fff"
+    "6600cc9966cc4c0099724c993f007f5f3f7f26004c39264cbf00ffdf7fff9900ccb266cc720099854c995f007f6f3f7f"
+    "39004c42264cff00ffff7fffcc00cccc66cc990099994c997f007f7f3f7f4c004c4c264cff00bfff7fdfcc0099cc66b2"
+    "990072994c857f005f7f3f6f4c00394c2642ff007fff7fbfcc0066cc669999004c994c727f003f7f3f5f4c00264c2639"
+    "ff003fff7f9fcc0033cc667f990026994c5f7f001f7f3f4f4c00134c262f3333335b5b5b848484adadadd6d6d6ffffff"
+)
 
 
 def _rgb(color) -> tuple[int, int, int]:
-    """AutoCAD Color Index to red, green, blue. 7 is "white or black, whichever shows": black here, as on paper."""
+    """AutoCAD Color Index to red, green, blue.
+
+    7 is the exception: AutoCAD draws it white on a dark background and black on paper. The table says
+    white; drafting is written black here, as on paper.
+    """
     if isinstance(color, tuple):
         return color
-    if color in _FIRST_COLORS:
-        return _FIRST_COLORS[color]
-    if 250 <= color <= 255:
-        return _GREYS[color - 250]
-    if not 10 <= color <= 249:
-        return _FIRST_COLORS[7]
-    # 10-249: 24 hues 15 degrees apart, each in five shades, each shade at full and at half saturation
-    hue, shade = (color // 10 - 1) * 15, _SHADES[(color % 10) // 2]
-    saturation = 0.5 if color % 2 else 1.0
-    sector, fraction = divmod(hue / 60, 1)
-    low, falling, rising = 1 - saturation, 1 - saturation * fraction, 1 - saturation * (1 - fraction)
-    r, g, b = ((1, rising, low), (falling, 1, low), (low, 1, rising), (low, falling, 1), (rising, low, 1), (1, low, falling))[int(sector) % 6]
-    return int(255 * shade * r), int(255 * shade * g), int(255 * shade * b)
+    if color == 7 or not 1 <= color <= 255:
+        return (0, 0, 0)
+    return tuple(_PALETTE[3 * color : 3 * color + 3])
 
 
 # Classes a block insert may take from its layer alone: things that are placed as objects. A block that merely

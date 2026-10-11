@@ -156,12 +156,15 @@ def test_colours_and_layers_match_autocad(path, dxf):
 
 
 def test_palette():
-    # values AutoCAD documents for its colour index
-    assert [ifc._rgb(i) for i in (1, 5, 8, 10, 11, 12, 13, 19, 20, 30, 50, 250, 255)] == [
-        (255, 0, 0), (0, 0, 255), (65, 65, 65), (255, 0, 0), (255, 127, 127), (204, 0, 0), (204, 102, 102), (76, 38, 38),
-        (255, 63, 0), (255, 127, 0), (255, 255, 0), (51, 51, 51), (255, 255, 255),
+    # the table is AutoCAD's own; these are entries anyone can check in its colour dialog
+    assert [ifc._rgb(i) for i in (1, 5, 8, 9, 10, 11, 12, 13, 19, 20, 30, 50, 250, 254, 255)] == [
+        (255, 0, 0), (0, 0, 255), (128, 128, 128), (192, 192, 192), (255, 0, 0), (255, 127, 127), (204, 0, 0),
+        (204, 102, 102), (76, 38, 38), (255, 63, 0), (255, 127, 0), (255, 255, 0), (51, 51, 51), (214, 214, 214),
+        (255, 255, 255),
     ]  # fmt: skip
     assert ifc._rgb((1, 2, 3)) == (1, 2, 3)
+    assert ifc._rgb(7) == (0, 0, 0)  # white in the table; written black, as on paper
+    assert len(ifc._PALETTE) == 768
 
 
 @pytest.mark.parametrize("path", RELEASES, ids=lambda p: p.stem)
