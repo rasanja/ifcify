@@ -18,6 +18,7 @@ import ifcopenshell.api.root
 import ifcopenshell.api.unit
 import ifcopenshell.guid
 
+from dwg2ifc import derive
 from dwg2ifc.classify import classify
 from dwg2ifc.entities import Drawing, bspline_points, fit_spline
 
@@ -202,6 +203,7 @@ class _Builder:
         prefix, conversion = _UNITS.get(units) or (("MILLI", None) if drawing.metric else (None, "inch"))
         metres = _METRES.get(units) or (0.001 if drawing.metric else 0.0254)
         self.millimetre = 0.001 / metres  # in drawing units, for line widths
+        self.metres = metres
         # A drawing is its model space. One with nothing there, such as a title block, is its paper-space layouts.
         spaces = [("Model Space", model_space)] if self.by_owner.get(model_space) else [
             (f"Layout {n}", handle)
@@ -215,8 +217,11 @@ class _Builder:
             if conversion
             else ifcopenshell.api.unit.add_si_unit(f, unit_type="LENGTHUNIT", prefix=prefix)
         )
-        # angles stay in radians, as DWG stores them
-        ifcopenshell.api.unit.assign_unit(f, units=[length, ifcopenshell.api.unit.add_si_unit(f, unit_type="PLANEANGLEUNIT")])
+        # angles stay in radians, as DWG stores them; areas are given in square metres whatever the drawing unit
+        ifcopenshell.api.unit.assign_unit(
+            f,
+            units=[length, ifcopenshell.api.unit.add_si_unit(f, unit_type="PLANEANGLEUNIT"), ifcopenshell.api.unit.add_si_unit(f, unit_type="AREAUNIT")],
+        )
         model = ifcopenshell.api.context.add_context(f, context_type="Model")
         self.context = ifcopenshell.api.context.add_context(
             f, context_type="Model", context_identifier="Annotation", target_view="MODEL_VIEW", parent=model
@@ -269,6 +274,8 @@ class _Builder:
                 self.give_type(e, product, items)
             if products:
                 f.createIfcRelContainedInSpatialStructure(ifcopenshell.guid.new(), None, None, None, products, storey)
+            if handle == model_space:
+                self.spaces(storey, handle)
         for kind, occurrences in self.typed.items():
             f.createIfcRelDefinesByType(ifcopenshell.guid.new(), None, None, None, occurrences, kind)
         for (layer, kind, colour), described in self.described.items():
@@ -306,12 +313,59 @@ class _Builder:
             tags[tag if not n else f"{tag}_{n + 1}"] = value  # a block may repeat a tag
         if tags:
             self.property_set("DWG_Attributes", tags, [product])
+        self.xdata(e, product)
+
+    def xdata(self, e, product) -> None:
         for app, items in e.get("xdata", ()):
             name = self.d.apps.get(app, "")
             # shortcut: AutoCAD's own bookkeeping apps are left out; only other programs' data is carried over
             if name and not name.upper().startswith(("ACAD", "ACDB", "GRADIENTCOLOR")):
                 listed = "; ".join(f"{code}={value}" for code, value in items)
-                self.property_set("DWG_XData", {name: listed}, [product])
+                self.property_set(f"DWG_XData_{name}", {"Items": listed}, [product])  # set names must be unique per object
+
+    def spaces(self, storey, owner) -> None:
+        """Rooms the drawing outlines and labels, as IfcSpace: a footprint extruded to an assumed height."""
+        f = self.f
+        height = 3.0 / self.metres  # shortcut: a plan does not say how high its rooms are
+        shift = self.origin_shift
+        made = []
+        for room in derive.spaces(self.d, owner, 0.25 / self.metres**2):
+            outline = _distinct([(x - shift[0], y - shift[1]) for x, y in room["outline"]])
+            if len(outline) < 3:
+                continue
+            if derive.area(outline) < 0:
+                outline.reverse()
+            corners = [f.createIfcCartesianPoint(p) for p in outline]
+            profile = f.createIfcArbitraryClosedProfileDef("AREA", None, f.createIfcPolyline([*corners, corners[0]]))
+            base = self.f.createIfcAxis2Placement3D(f.createIfcCartesianPoint((0.0, 0.0, float(room["elevation"] - shift[2]))))
+            solid = f.createIfcExtrudedAreaSolid(profile, base, self.direction(_Z), height)
+            space = f.create_entity(
+                "IfcSpace",
+                GlobalId=ifcopenshell.guid.new(),
+                Name=room["name"] or None,
+                LongName=next((t.split("\n")[0] for t in room["labels"] if t != room["name"]), None),
+                ObjectType="ROOM",
+                ObjectPlacement=f.createIfcLocalPlacement(storey.ObjectPlacement, self.origin),
+                Representation=f.createIfcProductDefinitionShape(
+                    None, None, [f.createIfcShapeRepresentation(self.body_context, "Body", "SweptSolid", [solid])]
+                ),
+                CompositionType="ELEMENT",
+            )
+            square_metres = room["area"] * self.metres**2
+            quantity = f.createIfcQuantityArea("NetFloorArea", None, None, square_metres, None)
+            sizes = f.createIfcElementQuantity(ifcopenshell.guid.new(), None, "Qto_SpaceBaseQuantities", None, None, [quantity])
+            f.createIfcRelDefinesByProperties(ifcopenshell.guid.new(), None, None, None, [space], sizes)
+            layer = self.d.layers.get(room["layer"], {}).get("name", "")
+            self.property_set(
+                "DWG_Room",
+                {"Labels": " | ".join(room["labels"]), "OutlineLayer": layer, "OutlineHandle": f"{room['handle']:X}",
+                 "Height": "assumed 3 m; the drawing does not give one"},
+                [space],
+            )  # fmt: skip
+            self.xdata(room, space)
+            made.append(space)
+        if made:
+            f.createIfcRelAggregates(ifcopenshell.guid.new(), None, None, None, storey, made)
 
     def element_class(self, e, items) -> str:
         """Solids and meshes are things in the model, and so is a block whose name or layer says what it is.

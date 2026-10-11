@@ -2,6 +2,7 @@ from collections import Counter
 from pathlib import Path
 
 import ifcopenshell
+import ifcopenshell.util.element
 import ifcopenshell.validate
 import pytest
 
@@ -123,3 +124,13 @@ def test_no_sample_reports_unconverted_drawing_entities():
     for sample in ASSETS.glob("*.dwg"):
         skipped = convert(sample.read_bytes())[1]
         assert set(skipped) <= {"LIGHT", "on a layer that is off or frozen"}, sample.name
+
+
+def test_floor_plan_rooms_become_spaces():
+    model = ifcopenshell.file.from_string(convert((ASSETS / "building001-0_floor1.dwg").read_bytes())[0])
+    spaces = {s.Name: s for s in model.by_type("IfcSpace")}
+    assert len(spaces) == 71  # the drawing numbers 71 rooms
+    psets = ifcopenshell.util.element.get_psets(spaces["126A"])
+    # the drawing labels this room "405 SF"
+    assert abs(psets["Qto_SpaceBaseQuantities"]["NetFloorArea"] / 0.3048**2 - 405) < 1
+    assert "405 SF" in psets["DWG_Room"]["Labels"]
