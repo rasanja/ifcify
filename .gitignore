@@ -7,3 +7,19 @@ __pycache__/
 output/
 sample-assets/
 drawings/
+
+# coding-agent and editor state
+.claude/
+.cursor/
+.codex/
+.gemini/
+.continue/
+.windsurf/
+.opencode/
+.aider*
+.agents/
+.roo/
+.cline/
+.kiro/
+.vscode/
+.idea/
