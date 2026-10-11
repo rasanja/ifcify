@@ -6,14 +6,15 @@ IfcMappedItem, and DWG layers become IfcPresentationLayerAssignments.
 
 import math
 import re
+import statistics
 from collections import defaultdict
 
 import ifcopenshell
 import ifcopenshell.api.aggregate
 import ifcopenshell.api.context
+import ifcopenshell.api.georeference
 import ifcopenshell.api.project
 import ifcopenshell.api.root
-import ifcopenshell.api.spatial
 import ifcopenshell.api.unit
 import ifcopenshell.guid
 
@@ -22,6 +23,11 @@ from dwg2ifc.entities import Drawing, bspline_points, fit_spline
 # DWG INSUNITS code -> (SI prefix, None) or (None, conversion unit name)
 _UNITS = {1: (None, "inch"), 2: (None, "foot"), 3: (None, "mile"), 4: ("MILLI", None), 5: ("CENTI", None),
           6: (None, None), 7: ("KILO", None), 10: (None, "yard"), 14: ("DECI", None)}  # fmt: skip
+
+# metres per drawing unit, by INSUNITS code
+_METRES = {1: 0.0254, 2: 0.3048, 3: 1609.344, 4: 0.001, 5: 0.01, 6: 1.0, 7: 1000.0, 10: 0.9144, 14: 0.1}
+# Viewers hold coordinates in single precision, which is good to about a millimetre 10 km from the origin.
+_FAR = 10_000.0
 
 # DWG entity type -> _Builder method, where the name is not simply the lowercased type
 _METHODS = {"POLYLINE_2D": "lwpolyline", "ATTRIB": "text", "TRACE": "solid", "3DFACE": "face3d",
@@ -95,6 +101,24 @@ def _plain_text(mtext: str) -> str:
     return s.replace("\\~", " ").replace("\\\\", "\\").replace("\\{", "{").replace("\\}", "}")
 
 
+def _far_origin(entities: list[dict], metres: float) -> tuple[float, float, float]:
+    """Where a drawing placed far from the origin (survey coordinates) sits, or zero if it is near."""
+    samples = []
+    for e in entities:
+        if e.get("extrusion", _Z) != _Z:
+            continue  # its coordinates are in a tilted plane, not world axes
+        for key in ("start", "point", "center", "points", "control", "fit", "corners"):
+            p = e.get(key)
+            p = p[0] if p and isinstance(p, list) else p
+            if p and len(p) >= 2:
+                samples.append((p[0], p[1], p[2] if len(p) > 2 else e.get("elevation", 0.0)))
+                break
+    if not samples:
+        return (0.0, 0.0, 0.0)
+    origin = tuple(float(round(statistics.median(axis))) for axis in zip(*samples))
+    return origin if math.hypot(*origin) * metres > _FAR else (0.0, 0.0, 0.0)
+
+
 def _kind(item) -> str:
     """The IfcShapeRepresentation type an item belongs in."""
     for ifc_class, kind in (
@@ -129,6 +153,10 @@ class _Builder:
         model_space = drawing.block_named("*Model_Space")
         units = drawing.units or (drawing.blocks[model_space]["units"] if model_space else 0)
         prefix, conversion = _UNITS.get(units) or (("MILLI", None) if drawing.metric else (None, "inch"))
+        metres = _METRES.get(units) or (0.001 if drawing.metric else 0.0254)
+        # model space is written relative to this point; block definitions keep their own coordinates
+        self.origin_shift = _far_origin(self.by_owner.get(model_space, []), metres)
+        self.shift = (0.0, 0.0, 0.0)
         length = (
             ifcopenshell.api.unit.add_conversion_based_unit(f, name=conversion)
             if conversion
@@ -153,7 +181,17 @@ class _Builder:
         ifcopenshell.api.aggregate.assign_object(f, products=[building], relating_object=site)
         ifcopenshell.api.aggregate.assign_object(f, products=[storey], relating_object=building)
 
-        placement = f.createIfcLocalPlacement(None, self.origin)
+        if any(self.origin_shift):
+            # keep the real position as georeferencing instead of in every coordinate
+            ifcopenshell.api.georeference.add_georeferencing(f)
+            east, north, height = self.origin_shift
+            ifcopenshell.api.georeference.edit_georeferencing(
+                f,
+                projected_crs={"Name": "DWG world coordinates", "MapUnit": length},
+                coordinate_operation={"Eastings": east, "Northings": north, "OrthogonalHeight": height},
+            )
+        # placements and containment are written directly: the API's assign_container costs 15 ms per product
+        storey.ObjectPlacement = f.createIfcLocalPlacement(None, self.origin)
         products = []
         for e in self.by_owner.get(model_space, []):
             items = self.items(e, ())
@@ -163,9 +201,10 @@ class _Builder:
             shape = f.createIfcProductDefinitionShape(None, None, [representation])
             # solids and meshes are things in the model; everything else is drafting
             create = f.createIfcBuildingElementProxy if representation.RepresentationIdentifier == "Body" else f.createIfcAnnotation
+            placement = f.createIfcLocalPlacement(storey.ObjectPlacement, self.origin)
             products.append(create(ifcopenshell.guid.new(), None, f"{e['type']}:{e['handle']:X}", None, e["type"], placement, shape))
         if products:
-            ifcopenshell.api.spatial.assign_container(f, products=products, relating_structure=storey)
+            f.createIfcRelContainedInSpatialStructure(ifcopenshell.guid.new(), None, None, None, products, storey)
         for layer, items in self.layer_items.items():
             f.createIfcPresentationLayerAssignment(layer, None, items, None)
 
@@ -189,8 +228,11 @@ class _Builder:
             return self.f.createIfcShapeRepresentation(self.body_context, "Body", kind, items)
         return self.f.createIfcShapeRepresentation(self.context, "Annotation", kind, items)
 
+    def xyz(self, p):
+        return tuple(float(c) - s for c, s in zip(p, self.shift))
+
     def point(self, p):
-        return self.f.createIfcCartesianPoint(tuple(map(float, p)))
+        return self.f.createIfcCartesianPoint(self.xyz(p))
 
     def direction(self, v):
         return self.f.createIfcDirection(tuple(map(float, v)))
@@ -212,11 +254,14 @@ class _Builder:
     def items(self, e, parents) -> list:
         """One DWG entity as IFC representation items, in its block's coordinates."""
         kind = e["type"]
-        name = "insert" if kind.startswith("DIMENSION") else _METHODS.get(kind, kind.lower())
+        name = "parts" if "parts" in e else "insert" if kind.startswith("DIMENSION") else _METHODS.get(kind, kind.lower())
+        outer, self.shift = self.shift, (self.origin_shift if not parents else (0.0, 0.0, 0.0))
         try:
             found = getattr(self, "_" + name)(e, parents)
         except (ValueError, ZeroDivisionError, OverflowError):  # geometry too broken to express
             found = None
+        finally:
+            self.shift = outer
         found = [] if found is None else found if isinstance(found, list) else [found]
         if not found:
             self.skipped[kind + " (empty)"] += 1
@@ -249,7 +294,7 @@ class _Builder:
             coords.append((x2, y2))
         if not segments:
             return None
-        listed = self.f.createIfcCartesianPointList3D([_to_wcs(axes, (float(x), float(y), elevation)) for x, y in coords])
+        listed = self.f.createIfcCartesianPointList3D([self.xyz(_to_wcs(axes, (x, y, elevation))) for x, y in coords])
         return self.f.createIfcIndexedPolyCurve(listed, segments, False)
 
     def faces(self, points, faces):
@@ -261,7 +306,7 @@ class _Builder:
                 loops.append(self.f.createIfcIndexedPolygonalFace(loop))
         if not loops:
             return None
-        listed = self.f.createIfcCartesianPointList3D([tuple(map(float, p)) for p in points])
+        listed = self.f.createIfcCartesianPointList3D([self.xyz(p) for p in points])
         return self.f.createIfcPolygonalFaceSet(listed, None, loops)
 
     def _line(self, e, _):
@@ -292,7 +337,10 @@ class _Builder:
         if not major or e["ratio"] <= 0:
             return None
         placement = self.placement((_unit(e["major"]), None, _unit(e["extrusion"])), e["center"])
-        ellipse = self.f.createIfcEllipse(placement, major, major * e["ratio"])
+        if e["ratio"] == 1.0:
+            ellipse = self.f.createIfcCircle(placement, major)
+        else:
+            ellipse = self.f.createIfcEllipse(placement, major, major * e["ratio"])
         if abs(e["end_angle"] - e["start_angle"] - 2 * math.pi) < 1e-9:
             return ellipse
         return self.trimmed(ellipse, e["start_angle"], e["end_angle"])
@@ -611,6 +659,17 @@ class _Builder:
         axes = _ocs(e["extrusion"])
         x_axis = _to_wcs(axes, (math.cos(e["rotation"]), math.sin(e["rotation"]), 0.0))
         return self.text(e, e["text"], _to_wcs(axes, e["point"]), x_axis, "bottom-left")
+
+    def _parts(self, e, parents):
+        """An entity drawn from its proxy graphics: each part is built like the entity it resembles."""
+        out = []
+        for part in e["parts"]:
+            found = getattr(self, "_" + part["type"].lower())(part | {"layer": e["layer"]}, parents)
+            out += [] if found is None else found if isinstance(found, list) else [found]
+        return out
+
+    def _proxytext(self, e, _):
+        return self.text(e, e["text"], e["point"], _unit(e["x_axis"]), "bottom-left")
 
     def _mtext(self, e, _):  # insertion point and x axis are already in world coordinates
         return self.text(e, _plain_text(e["text"]), e["point"], _unit(e["x_axis"]), "top-left")

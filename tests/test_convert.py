@@ -62,6 +62,10 @@ def test_floor_plan_ifc_content():
     assert len(model.by_type("IfcAnnotation")) > 2200
     assert {layer.Name for layer in model.by_type("IfcPresentationLayerAssignment")} >= {"A-WALL", "A-DOOR", "A-GLAZ"}
     assert len(model.by_type("IfcMappedItem")) >= 17
+    # the drawing sits 1,758 km from the origin; geometry is written near zero and the position kept as georeferencing
+    conversion = model.by_type("IfcMapConversion")[0]
+    assert (conversion.Eastings, conversion.Northings) == (69221643.0, 27676202.0)
+    assert max(abs(c) for point in model.by_type("IfcCartesianPoint") for c in point.Coordinates) < 5000
     assert len(model.by_type("IfcAnnotationFillArea")) >= 284
     # zero-length edges crash geometry kernels, so none may be written
     for curve in model.by_type("IfcIndexedPolyCurve"):
@@ -77,3 +81,15 @@ def test_conference_room_solids_become_breps():
     assert skipped == {"LIGHT": 8}
     assert len(model.by_type("IfcBuildingElementProxy")) == 38  # 30 solids, 2 surfaces, 6 light fixtures
     assert model.by_type("IfcBSplineSurfaceWithKnots") and model.by_type("IfcToroidalSurface")
+
+
+def test_unknown_entities_are_drawn_from_their_proxy_graphics():
+    # MULTILEADER has no decoder; each one carries a drawing of itself (leader lines, arrowheads, text)
+    drawing = entities.load((ASSETS / "architectural_-_annotation_scaling_and_multileaders.dwg").read_bytes())
+    leaders = [e for e in drawing.entities if e["type"] == "MULTILEADER"]
+    assert len(leaders) == 36 and "MULTILEADER" not in drawing.skipped
+    kinds = Counter(part["type"] for e in leaders for part in e["parts"])
+    assert kinds == {"POLYLINE_3D": 111, "PROXYTEXT": 62, "ELLIPSE": 3}
+    assert "EPDM ROOF CONSTRUCTION:" in {part.get("text") for e in leaders for part in e["parts"]}
+    text, skipped = convert((ASSETS / "architectural_-_annotation_scaling_and_multileaders.dwg").read_bytes())
+    assert "MULTILEADER" not in skipped and "'EPDM ROOF CONSTRUCTION:'" in text

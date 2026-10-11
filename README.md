@@ -17,13 +17,17 @@ DWG releases R14, R2000, R2004, R2007, R2010, R2013 and R2018.
 | Blocks and their inserts, dimensions | `IfcRepresentationMap` placed by `IfcMappedItem` |
 | 3D solids, regions, surfaces | `IfcAdvancedBrep` or a surface model, in an `IfcBuildingElementProxy` |
 | Meshes, polyface meshes, 3D faces | `IfcPolygonalFaceSet` |
+| Multileaders, wipeouts and custom entities | drawn from the picture of themselves they carry, when they have one |
 | Layers | `IfcPresentationLayerAssignment` |
 | Drawing units | IFC length unit |
 
 Everything goes into one storey: `IfcProject > IfcSite > IfcBuilding > IfcBuildingStorey`.
 
-Not converted yet: multileaders, rays and construction lines, wipeouts, images, tables, lights and other
-custom objects, colours and line weights, and paper space. Anything left out is counted in the
+A drawing placed far from the origin, as survey drawings are, is written relative to a local origin so
+viewers can display it. Its real position is kept in the file as `IfcMapConversion`.
+
+Not converted yet: rays and construction lines, lights, custom entities that carry no picture of
+themselves, colours and line weights, and paper space. Anything left out is counted in the
 `X-DWG-Skipped` response header, so nothing is dropped silently.
 
 ## Install

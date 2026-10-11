@@ -3,7 +3,7 @@
 import math
 from collections import Counter
 
-from dwg2ifc import acis, datastore, dwg, header
+from dwg2ifc import acis, datastore, dwg, header, proxy
 from dwg2ifc.dwg import since
 
 
@@ -146,9 +146,9 @@ def _block_header(o: dwg.Obj) -> dict:
 def _entity_common(o: dwg.Obj) -> dict:
     """Common entity data and handles (20.4.1, 20.4.2). Leaves o.handles at the entity's own handles."""
     r, release = o.r, o.release
-    if r.b():  # proxy graphics
-        graphics_size = r.bll() if since(release, "R2010") else r.rl()
-        r.p += graphics_size * 8
+    graphics = b""
+    if r.b():  # proxy graphics: a drawing of the entity for programs that do not know its type
+        graphics = r.raw(r.bll() if since(release, "R2010") else r.rl())
     if not since(release, "R2000"):
         o.set_size(r.rl())
     hr = o.handles
@@ -182,7 +182,7 @@ def _entity_common(o: dwg.Obj) -> dict:
     if since(release, "R2000"):
         r.rc()  # lineweight
 
-    e = {"type": o.type, "handle": o.handle, "invisible": invisible}
+    e = {"type": o.type, "handle": o.handle, "invisible": invisible, "graphics": graphics}
     e["owner"] = hr.h(o.handle) if entmode == 0 else {1: "paper", 2: "model"}.get(entmode)
     for _ in range(reactors):
         hr.h()
@@ -674,12 +674,19 @@ def load(data: bytes) -> Drawing:
                 drawing.blocks[o.handle] = _block_header(o)
             elif o.type in _DECODERS:
                 entity = _entity_common(o)
+                del entity["graphics"]
                 entity |= _DECODERS[o.type](o, o.r)
                 if o.r.p != o.end:
                     raise ValueError(f"{o.type} {o.handle:X} decoded to bit {o.r.p}, expected {o.end}")
                 drawing.entities.append(entity)
             elif o.is_entity and o.type not in _STRUCTURAL:
-                drawing.skipped[o.type] += 1
+                # a type we do not decode: draw it from the picture of itself it carries, if it has one
+                entity = _entity_common(o)
+                entity["parts"] = proxy.decode(entity.pop("graphics"), release)
+                if entity["parts"]:
+                    drawing.entities.append(entity)
+                else:
+                    drawing.skipped[o.type] += 1
         except (ValueError, IndexError, KeyError, OverflowError):
             drawing.skipped[f"{kind} (unreadable)"] += 1
 
