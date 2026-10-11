@@ -1,0 +1,26 @@
+[project]
+name = "dwg2ifc"
+version = "0.1.0"
+description = "Headless DWG to IFC4X3 conversion service, no AutoCAD required"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "ifcopenshell",
+]
+
+[project.scripts]
+dwg2ifc = "dwg2ifc.api:main"
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "httpx2",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

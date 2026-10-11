@@ -1,0 +1,128 @@
+; Each ';;; name' block is one step. tools/make_fixtures.sh runs the steps one at a time,
+; so a step AutoCAD rejects is reported and skipped without losing the others.
+; In a script every space and every newline is an Enter; text prompts take the rest of the line.
+; The console has no screen, so objects are selected with ALL or L (last), never by picking a point.
+;;; block
+INSUNITS 4
+-ATTDEF
+
+TAG1
+Enter value
+Default
+100,2 1 0
+LINE 100,0 104,0 104,4 100,4 C
+CIRCLE 102,2 1
+-BLOCK SYMBOL 100,0 ALL
+
+;;; basic
+LINE 0,0,0 10,5,2
+
+CIRCLE 20,0 5
+ARC C 40,0 45,0 A 135
+ELLIPSE C 60,0 70,0 3
+ELLIPSE A C 80,0 90,0 3 0 120
+POINT 5,20
+;;; lwpolyline
+PLINE 0,30 10,30 A 15,35 L 0,40 C
+PLINE 20,30 W 0.5 1 30,30 30,35
+
+;;; polyline2d
+PLINETYPE 0
+PLINE 0,45 W 0 0 10,45 A 15,48 L 0,49
+
+PLINETYPE 2
+;;; polyline3d
+3DPOLY 0,50,0 10,50,5 10,60,5 C
+;;; spline
+SPLINE 0,70 5,75 10,70 15,75 20,70
+
+
+
+;;; solid
+SOLID 30,30 40,30 30,40 40,40
+
+;;; face3d
+3DFACE 50,45,0 60,45,0 60,55,5 50,55,5
+
+;;; rays
+RAY 0,90 1,91
+
+XLINE 0,95 1,96
+
+;;; text
+TEXT 0,100 2.5 0 Hello DWG
+TEXT J MC 40,100 2.5 30 Centered text
+;;; mtext
+-MTEXT 0,115 H 2.5 W 40 First line\PSecond {\fArial|b1;bold} line
+
+;;; dim_linear
+DIMLINEAR 0,0 10,0 5,-5
+DIMALIGNED 0,0 10,5 2,6
+;;; dim_radial
+DIMRADIUS 25,0 30,5
+DIMDIAMETER 25,0 30,-5
+;;; dim_angular
+DIMANGULAR  40,0 45,0 40,5 47,4
+;;; dim_ordinate
+DIMORDINATE 60,0 X 62,-6
+;;; leader
+LEADER 0,125 5,130 12,130
+
+Leader note
+
+;;; hatch_solid
+PLINE 60,30 70,30 70,40 60,40 C
+-HATCH P SOLID S L
+
+
+;;; hatch_pattern
+PLINE 80,30 90,30 A 90,40 L 80,40 C
+-HATCH P ANSI31 1 0 S L
+
+
+;;; mesh
+3DMESH 3 3 0,140,0 5,140,1 10,140,0 0,145,1 5,145,3 10,145,1 0,150,0 5,150,1 10,150,0
+;;; pface
+PFACE 20,140,0 30,140,0 30,150,0 20,150,0 25,145,6
+1 2 5
+
+2 3 5
+
+3 4 5
+
+4 1 5
+
+
+;;; insert
+-INSERT SYMBOL 120,0 1 1 0 Value A
+-INSERT SYMBOL 130,0 2 0.5 30 Value B
+-INSERT SYMBOL 140,0 -1 1 0 Mirrored
+;;; minsert
+MINSERT SYMBOL 120,20 1 1 0 2 3 8 10 Grid
+;;; tilted_plane
+UCS X 90
+CIRCLE 200,10 4
+ARC C 220,10 224,10 A 100
+PLINE 240,5 250,5 A 255,10 L 240,15 C
+TEXT 200,30 2 0 Tilted plane
+-INSERT SYMBOL 260,5 1 1 45 Tilted
+UCS W
+;;; solids
+BOX 300,0,0 310,8,6
+SPHERE 330,5,5 4
+;;; cones
+CONE 350,5,0 4 8
+CONE 370,5,0 4 T 2 8
+CONE 390,5,10 4 T 6 -8
+CYLINDER 410,5,0 3 7
+;;; torus
+TORUS 430,5,5 6 2
+;;; wedge
+WEDGE 450,0,0 460,8,6
+;;; region
+CIRCLE 20,60 3
+REGION L
+
+;;; wipeout
+WIPEOUT 0,160 10,160 10,170 0,170
+
