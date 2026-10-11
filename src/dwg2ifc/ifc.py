@@ -106,8 +106,9 @@ def _to_wcs(axes, p):
 
 
 def _same(p, q) -> bool:
-    """Points too close to make an edge. Zero-length edges crash geometry kernels (seen with IfcOpenShell)."""
-    return all(math.isclose(a, b, rel_tol=1e-12, abs_tol=1e-9) for a, b in zip(p, q))
+    """Points too close to make an edge. Edges shorter than the model's precision (1e-5) crash or fail in
+    geometry kernels (seen with IfcOpenShell)."""
+    return all(math.isclose(a, b, rel_tol=1e-12, abs_tol=1e-5) for a, b in zip(p, q))
 
 
 def _distinct(points):
@@ -187,8 +188,13 @@ class _Builder:
         prefix, conversion = _UNITS.get(units) or (("MILLI", None) if drawing.metric else (None, "inch"))
         metres = _METRES.get(units) or (0.001 if drawing.metric else 0.0254)
         self.millimetre = 0.001 / metres  # in drawing units, for line widths
-        # model space is written relative to this point; block definitions keep their own coordinates
-        self.origin_shift = _far_origin(self.by_owner.get(model_space, []), metres)
+        # A drawing is its model space. One with nothing there, such as a title block, is its paper-space layouts.
+        spaces = [("Model Space", model_space)] if self.by_owner.get(model_space) else [
+            (f"Layout {n}", handle)
+            for n, handle in enumerate((h for h, b in drawing.blocks.items() if b["name"].lower().startswith("*paper_space") and self.by_owner.get(h)), 1)
+        ]  # fmt: skip
+        # each space is written relative to this point; block definitions keep their own coordinates
+        self.origin_shift = _far_origin([e for _, handle in spaces for e in self.by_owner[handle]], metres)
         self.shift = (0.0, 0.0, 0.0)
         length = (
             ifcopenshell.api.unit.add_conversion_based_unit(f, name=conversion)
@@ -209,10 +215,8 @@ class _Builder:
 
         site = ifcopenshell.api.root.create_entity(f, ifc_class="IfcSite", name="Site")
         building = ifcopenshell.api.root.create_entity(f, ifc_class="IfcBuilding", name="Building")
-        storey = ifcopenshell.api.root.create_entity(f, ifc_class="IfcBuildingStorey", name="Model Space")
         ifcopenshell.api.aggregate.assign_object(f, products=[site], relating_object=project)
         ifcopenshell.api.aggregate.assign_object(f, products=[building], relating_object=site)
-        ifcopenshell.api.aggregate.assign_object(f, products=[storey], relating_object=building)
 
         if any(self.origin_shift):
             # keep the real position as georeferencing instead of in every coordinate
@@ -224,22 +228,26 @@ class _Builder:
                 coordinate_operation={"Eastings": east, "Northings": north, "OrthogonalHeight": height},
             )
         # placements and containment are written directly: the API's assign_container costs 15 ms per product
-        storey.ObjectPlacement = f.createIfcLocalPlacement(None, self.origin)
-        products = []
-        for e in self.by_owner.get(model_space, []):
-            items = self.items(e, ())
-            if not items:
-                continue
-            representation = self.representation(items)
-            shape = f.createIfcProductDefinitionShape(None, None, [representation])
-            # solids and meshes are things in the model; everything else is drafting
-            create = f.createIfcBuildingElementProxy if representation.RepresentationIdentifier == "Body" else f.createIfcAnnotation
-            placement = f.createIfcLocalPlacement(storey.ObjectPlacement, self.origin)
-            products.append(create(ifcopenshell.guid.new(), None, f"{e['type']}:{e['handle']:X}", None, e["type"], placement, shape))
-        if products:
-            f.createIfcRelContainedInSpatialStructure(ifcopenshell.guid.new(), None, None, None, products, storey)
+        for space_name, handle in spaces or [("Model Space", None)]:
+            storey = ifcopenshell.api.root.create_entity(f, ifc_class="IfcBuildingStorey", name=space_name)
+            ifcopenshell.api.aggregate.assign_object(f, products=[storey], relating_object=building)
+            storey.ObjectPlacement = f.createIfcLocalPlacement(None, self.origin)
+            products = []
+            for e in self.by_owner.get(handle, []):
+                items = self.items(e, ())
+                if not items:
+                    continue
+                representation = self.representation(items)
+                shape = f.createIfcProductDefinitionShape(None, None, [representation])
+                # solids and meshes are things in the model; everything else is drafting
+                create = f.createIfcBuildingElementProxy if representation.RepresentationIdentifier == "Body" else f.createIfcAnnotation
+                placement = f.createIfcLocalPlacement(storey.ObjectPlacement, self.origin)
+                products.append(create(ifcopenshell.guid.new(), None, f"{e['type']}:{e['handle']:X}", None, e["type"], placement, shape))
+            if products:
+                f.createIfcRelContainedInSpatialStructure(ifcopenshell.guid.new(), None, None, None, products, storey)
         for name, items in self.layer_items.items():
-            f.createIfcPresentationLayerAssignment(name, None, items, None)
+            if items:  # a layer whose entities all came out empty has nothing to assign
+                f.createIfcPresentationLayerAssignment(name, None, items, None)
 
     def representation(self, items):
         groups = defaultdict(list)
@@ -287,7 +295,7 @@ class _Builder:
     def items(self, e, parents) -> list:
         """One DWG entity as IFC representation items, in its block's coordinates."""
         kind = e["type"]
-        name = "parts" if "parts" in e else "insert" if kind.startswith("DIMENSION") else _METHODS.get(kind, kind.lower())
+        name = "parts" if "parts" in e else "dimension" if kind.startswith("DIMENSION") else _METHODS.get(kind, kind.lower())
         outer, self.shift = self.shift, (self.origin_shift if not parents else (0.0, 0.0, 0.0))
         try:
             found = getattr(self, "_" + name)(e, parents)
@@ -296,8 +304,6 @@ class _Builder:
         finally:
             self.shift = outer
         found = [] if found is None else found if isinstance(found, list) else [found]
-        if not found:
-            self.skipped[kind + " (empty)"] += 1
         layer = self.d.layers.get(e["layer"], {})
         self.layer_items[layer.get("name", "0")] += found
         self.style(e, layer, found)
@@ -760,6 +766,54 @@ class _Builder:
             self.direction(ax), self.direction(ay), self.point(origin), sx, self.direction(az), sy, sz
         )
         return self.f.createIfcMappedItem(source, target)
+
+    def _dimension(self, e, parents):
+        """The block AutoCAD drew for the dimension, or, when the drawing has none, a plain version of our own."""
+        block = self._insert(e, parents)
+        if block is not None:
+            return block
+        # shortcut: lines and centred text only; no arrowheads, and angular dimensions get just their text
+        kind, defs = e["type"], e["defs"]
+        axes = _ocs(e["extrusion"])
+        style = self.d.dimstyles.get(e["style"], {})
+        height = style.get("text", 0) * style.get("scale", 1) or 2.5 * self.millimetre
+        along = axes[0]
+        lines = []
+        if kind in ("DIMENSION_LINEAR", "DIMENSION_ALIGNED"):
+            along = _to_wcs(axes, (math.cos(e["angle"]), math.sin(e["angle"]), 0.0))
+            if kind == "DIMENSION_ALIGNED":
+                along = _unit(tuple(b - a for a, b in zip(defs[13], defs[14])))
+            # the dimension line runs through point 10; each extension line drops onto it from its origin
+            feet = [
+                tuple(defs[10][i] + along[i] * sum((origin[k] - defs[10][k]) * along[k] for k in range(3)) for i in range(3))
+                for origin in (defs[13], defs[14])
+            ]
+            lines = [[defs[13], feet[0]], [defs[14], feet[1]], feet]
+        elif kind in ("DIMENSION_RADIUS", "DIMENSION_DIAMETER"):
+            lines = [[defs[10], defs[15]]]
+        elif kind == "DIMENSION_ORDINATE":
+            lines = [[defs[13], defs[14]]]
+        value = e["measurement"]
+        if value is None and len(lines) == 3:
+            value = math.dist(*lines[2])
+        if value is not None and kind in ("DIMENSION_ANG3PT", "DIMENSION_ANG2LN"):
+            value = math.degrees(value)
+        measured = "" if value is None else f"{value:.4f}".rstrip("0").rstrip(".")
+        text = _plain_text(e["text"]).replace("<>", measured) if e["text"].strip() else measured
+        if along[0] < 0 or (along[0] == 0 and along[1] < 0):
+            along = tuple(-c for c in along)  # keep the text reading left to right
+        label = self.text({"height": height, "extrusion": e["extrusion"]}, text, _to_wcs(axes, e["text_point"]), along, "center")
+        return [item for item in (*map(self.polyline, lines), label) if item is not None]
+
+    def _tolerance(self, e, _):
+        style = self.d.dimstyles.get(e["style"], {})
+        height = style.get("text", 0) * style.get("scale", 1) or 2.5 * self.millimetre
+        # shortcut: the feature control frame is written as plain text, its boxes as bars
+        text = _plain_text(e["text"]).replace("%%v", " | ").replace("^J", "\n")
+        return self.text({"height": height, "extrusion": e["extrusion"]}, text, e["point"], _unit(e["x_axis"]), "bottom-left")
+
+    def _mline(self, e, _):
+        return [line for points in e["elements"] if (line := self.polyline(points + points[:1] if e["closed"] else points)) is not None]
 
     def _minsert(self, e, parents):
         cells = [

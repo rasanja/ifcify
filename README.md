@@ -15,6 +15,7 @@ DWG releases R14, R2000, R2004, R2007, R2010, R2013 and R2018.
 | Text, multiline text, attributes | `IfcTextLiteralWithExtent` |
 | Hatches, 2D solids | `IfcAnnotationFillArea` |
 | Blocks and their inserts, dimensions | `IfcRepresentationMap` placed by `IfcMappedItem` |
+| Tolerances, multilines | text and curves |
 | 3D solids, regions, surfaces | `IfcAdvancedBrep` or a surface model, in an `IfcBuildingElementProxy` |
 | Meshes, polyface meshes, 3D faces | `IfcPolygonalFaceSet` |
 | Multileaders, wipeouts and custom entities | drawn from the picture of themselves they carry, when they have one |
@@ -22,7 +23,9 @@ DWG releases R14, R2000, R2004, R2007, R2010, R2013 and R2018.
 | Colours and line weights | `IfcStyledItem` with curve, fill or surface styles |
 | Drawing units | IFC length unit |
 
-Everything goes into one storey: `IfcProject > IfcSite > IfcBuilding > IfcBuildingStorey`.
+Model space goes into one storey: `IfcProject > IfcSite > IfcBuilding > IfcBuildingStorey`. A drawing
+with nothing in model space, such as a title block, is exported as its paper-space layouts instead,
+one storey per layout.
 
 A drawing placed far from the origin, as survey drawings are, is written relative to a local origin so
 viewers can display it. Its real position is kept in the file as `IfcMapConversion`.
@@ -30,7 +33,7 @@ viewers can display it. Its real position is kept in the file as `IfcMapConversi
 Entities on layers that are switched off or frozen are left out, as AutoCAD hides them.
 
 Not converted yet: rays and construction lines, lights, custom entities that carry no picture of
-themselves, linetypes, text fonts, and paper space. Anything left out is counted in the
+themselves, linetypes, text fonts, and paper-space layouts of drawings that also have a model. Anything left out is counted in the
 `X-DWG-Skipped` response header, so nothing is dropped silently.
 
 ## Run with Docker

@@ -14,6 +14,8 @@ class Drawing:
         self.metric = False  # MEASUREMENT: fallback when the drawing declares no units
         self.layers: dict[int, dict] = {}  # handle -> {name, color, lineweight, off, frozen, locked}
         self.blocks: dict[int, dict] = {}  # block header handle -> {name, base, units}
+        self.dimstyles: dict[int, dict] = {}  # handle -> {scale, arrow, text}
+        self.spaces: dict[str, int] = {}  # "model" and "paper" -> block header handle, from the block table
         self.entities: list[dict] = []  # each has type, handle, owner (block header handle), layer
         self.skipped: Counter[str] = Counter()  # entity types we could not convert
 
@@ -101,15 +103,15 @@ def fit_spline(fit: list, parameter: int = 0) -> tuple[list, list]:
     return knots, control[::-1]
 
 
-def _object_common(o: dwg.Obj) -> None:
+def _object_common(o: dwg.Obj) -> int:
     r = o.r
     if not since(o.release, "R2000"):
         o.set_size(r.rl())
-    r.bl()  # reactor count
-    if since(o.release, "R2004"):
-        r.b()  # xdictionary missing
+    reactors = r.bl()
+    has_dictionary = not (since(o.release, "R2004") and r.b())
     if since(o.release, "R2013"):
         r.b()  # has data-store data
+    return reactors + has_dictionary  # handles between the owner and the object's own handles
 
 
 def _table_name(o: dwg.Obj) -> str:
@@ -156,6 +158,16 @@ def _layer(o: dwg.Obj) -> dict:
         if color > 0x7FFF:  # stored negative when the layer is off
             color, off = 0x10000 - color, True
     return {"name": name, "color": color or 7, "lineweight": lineweight, "off": off, "frozen": frozen, "locked": locked}
+
+
+def _block_control(o: dwg.Obj) -> dict:
+    """The block table: its last two handles name model space and the active paper space."""
+    skip = _object_common(o)
+    count = o.r.bl()
+    hr = o.handles
+    for _ in range(1 + skip + count):  # owner, reactors and dictionary, then one per block
+        hr.h(o.handle)
+    return {"model": hr.h(o.handle), "paper": hr.h(o.handle)}
 
 
 def _block_header(o: dwg.Obj) -> dict:
@@ -397,27 +409,100 @@ def _insert(o, r):
     return e
 
 
+# definition points after the common dimension data, by kind: DXF group -> order in the file
+_DIMENSION_POINTS = {
+    "DIMENSION_ORDINATE": (10, 13, 14),
+    "DIMENSION_LINEAR": (13, 14, 10),
+    "DIMENSION_ALIGNED": (13, 14, 10),
+    "DIMENSION_ANG3PT": (10, 13, 14, 15),
+    "DIMENSION_ANG2LN": (13, 14, 15, 10),
+    "DIMENSION_RADIUS": (10, 15),
+    "DIMENSION_DIAMETER": (15, 10),
+}
+
+
 def _dimension(o, r):
-    """Every DIMENSION kind: AutoCAD keeps the drawn dimension in an anonymous block, which is all we place."""
+    """Every DIMENSION kind. AutoCAD usually keeps the drawn dimension in an anonymous block, which is then all
+    we place; the definition points are for drawings saved without that block."""
     release = o.release
     if since(release, "R2010"):
         r.rc()  # version
     extrusion = r.bd3()
-    r.rd2()  # text midpoint
+    text_point = r.rd2()
     elevation = r.bd()
     r.rc()  # flags
-    o.text()  # user text
+    text = o.text()  # what the user typed over the measurement, if anything
     r.bd(), r.bd()  # text rotation, horizontal direction
     scale = tuple(s or 1.0 for s in r.bd3())
     rotation = r.bd()
+    measurement = None
     if since(release, "R2000"):
-        r.bs(), r.bs(), r.bd(), r.bd()  # attachment, line spacing style and factor, measurement
+        r.bs(), r.bs(), r.bd()  # attachment, line spacing style and factor
+        measurement = r.bd()
     if since(release, "R2007"):
         r.b(), r.b(), r.b()
     point = (*r.rd2(), elevation)
-    r.p = o.end  # definition points differ per kind and are not needed to place the block
-    o.handles.h()  # dimension style
-    return {"point": point, "scale": scale, "rotation": rotation, "extrusion": extrusion, "block": o.handles.h(o.handle)}
+    e = {"point": point, "scale": scale, "rotation": rotation, "extrusion": extrusion, "text": text, "measurement": measurement,
+         "text_point": (*text_point, elevation), "angle": 0.0}  # fmt: skip
+    if o.type == "DIMENSION_ANG2LN":
+        r.rd2()  # arc point
+    e["defs"] = {group: r.bd3() for group in _DIMENSION_POINTS[o.type]}
+    if o.type == "DIMENSION_ORDINATE":
+        r.rc()  # x or y ordinate
+    elif o.type in ("DIMENSION_LINEAR", "DIMENSION_ALIGNED"):
+        r.bd()  # extension line slant
+        if o.type == "DIMENSION_LINEAR":
+            e["angle"] = r.bd()
+    elif o.type in ("DIMENSION_RADIUS", "DIMENSION_DIAMETER"):
+        r.bd()  # leader length
+    e["style"] = o.handles.h(o.handle)
+    e["block"] = o.handles.h(o.handle)
+    return e
+
+
+def _tolerance(o, r):
+    if not since(o.release, "R2000"):
+        r.bs(), r.bd(), r.bd()  # unknown, height, gap
+    e = {"point": r.bd3(), "x_axis": r.bd3(), "extrusion": r.bd3(), "text": o.text()}
+    e["style"] = o.handles.h(o.handle)
+    return e
+
+
+def _mline(o, r):
+    """A multiline: several parallel lines. Each vertex gives, per line, how far along the miter direction it sits."""
+    r.bd(), r.rc(), r.bd3()  # scale, justification, base point
+    e = {"extrusion": r.bd3(), "closed": r.bs() == 3}
+    lines, vertices = r.rc(), r.bs()
+    e["elements"] = [[] for _ in range(lines)]
+    for _ in range(vertices):
+        vertex = r.bd3()
+        r.bd3()  # direction to the next vertex
+        miter = r.bd3()
+        for element in e["elements"]:
+            parameters = [r.bd() for _ in range(r.bs())]
+            for _ in range(r.bs()):
+                r.bd()  # area fill parameter
+            offset = parameters[0] if parameters else 0.0
+            element.append(tuple(v + offset * m for v, m in zip(vertex, miter)))
+    return e
+
+
+def _dimstyle(o: dwg.Obj) -> dict:
+    """The three sizes needed to draw a dimension ourselves: overall scale, arrow size, text height."""
+    _table_name(o)
+    r = o.r
+    o.text(), o.text()  # prefix/suffix
+    scale, arrow = r.bd(), r.bd()
+    for _ in range(7):
+        r.bd()
+    if since(o.release, "R2007"):
+        r.bd(), r.bd(), r.bs(), r.bs(), r.bl(), r.rc()  # fixed extension length, jog angle, fill, fill colour
+    for _ in range(6):
+        r.b()
+    r.bs(), r.bs(), r.bs()
+    if since(o.release, "R2007"):
+        r.bs()
+    return {"scale": scale or 1.0, "arrow": arrow, "text": r.bd()}
 
 
 def _text(o, r):
@@ -658,6 +743,8 @@ _DECODERS = {
     "TRACE": _solid,
     "3DFACE": _face3d,
     "LEADER": _leader,
+    "TOLERANCE": _tolerance,
+    "MLINE": _mline,
     "HATCH": _hatch,
 } | {
     name: _acis
@@ -708,6 +795,13 @@ def load(data: bytes) -> Drawing:
                 drawing.layers[o.handle] = _layer(o)
                 if o.r.p != o.end:
                     raise ValueError(f"LAYER {o.handle:X} decoded to bit {o.r.p}, expected {o.end}")
+            elif o.type == "DIMSTYLE" and since(release, "R2000"):
+                try:
+                    drawing.dimstyles[o.handle] = _dimstyle(o)
+                except ValueError:
+                    pass  # sizes fall back to defaults
+            elif o.type == "BLOCK_CONTROL":
+                drawing.spaces = _block_control(o)
             elif o.type == "BLOCK_HEADER":
                 drawing.blocks[o.handle] = _block_header(o)
             elif o.type in _DECODERS:
@@ -739,6 +833,7 @@ def load(data: bytes) -> Drawing:
                 except ValueError:
                     drawing.skipped[f"{e['type']} (unreadable)"] += 1
     spaces = {"model": drawing.block_named("*Model_Space"), "paper": drawing.block_named("*Paper_Space")}
+    spaces |= {k: h for k, h in drawing.spaces.items() if h in drawing.blocks}  # the block table knows best
     by_handle = {e["handle"]: e for e in drawing.entities}
     for entity in drawing.entities:
         entity["owner"] = spaces.get(entity["owner"], entity["owner"])

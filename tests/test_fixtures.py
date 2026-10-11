@@ -190,3 +190,31 @@ def test_converts_to_ifc(path):
     assert "REDLAYER" in names and not names & {"OFFLAYER", "FROZENLAYER"}
     red = [style for style in model.by_type("IfcCurveStyle") if tuple(style.CurveColour)[1:] == (1.0, 0.0, 0.0)]
     assert red and all(item.is_a("IfcCircle") for style in red for styled in model.get_inverse(style) for item in [styled.Item])
+
+
+@pytest.mark.parametrize("path", RELEASES, ids=lambda p: p.stem)
+def test_dimension_without_its_block_is_drawn_from_its_points(path):
+    """Some programs save dimensions without the block AutoCAD draws; then we draw lines and the measurement."""
+    drawing = entities.load(path.read_bytes())
+    linear = next(e for e in drawing.entities if e["type"] == "DIMENSION_LINEAR")
+    # as drawn: DIMLINEAR 0,0 10,0 5,-5
+    assert (linear["defs"][13], linear["defs"][14]) == ((0.0, 0.0, 0.0), (10.0, 0.0, 0.0))
+    assert linear["defs"][10][1] == -5.0
+    for e in drawing.entities:
+        if e["type"].startswith("DIMENSION"):
+            e["block"] = 0
+    model, skipped = ifc.build(drawing, "test")
+    dimension = next(p for p in model.by_type("IfcAnnotation") if p.ObjectType == "DIMENSION_LINEAR")
+    found = set()
+    todo = list(dimension.Representation.Representations[0].Items)
+    while todo:
+        item = todo.pop()
+        if item.is_a("IfcMappedItem"):
+            todo += item.MappingSource.MappedRepresentation.Items
+        elif item.is_a("IfcTextLiteral"):
+            found.add(item.Literal)
+        else:
+            found.add(tuple(p.Coordinates for p in item.Points))
+    assert "10" in found
+    assert ((0.0, -5.0, 0.0), (10.0, -5.0, 0.0)) in found  # the dimension line
+    assert ((0.0, 0.0, 0.0), (0.0, -5.0, 0.0)) in found  # an extension line

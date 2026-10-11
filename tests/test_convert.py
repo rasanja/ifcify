@@ -43,8 +43,9 @@ class _Errors:
 
     def error(self, message, *args):
         # ifcopenshell cannot evaluate IfcSurfaceWeightsPositive and reports its own TypeError as a violation
-        if "unsupported operand type" not in str(message):
-            self.errors.append(str(message))
+        text = str(message) % args if args else str(message)
+        if "unsupported operand type" not in text:
+            self.errors.append(text)
 
     def __getattr__(self, name):  # warning, info, set_state, ...
         return lambda *args, **kwargs: None
@@ -63,7 +64,7 @@ def test_floor_plan_ifc_content():
     text, skipped = convert((ASSETS / "building001-0_floor1.dwg").read_bytes())
     model = ifcopenshell.file.from_string(text)
     # 4 of its layers are off, the grid among them
-    assert skipped == {"LWPOLYLINE (empty)": 1, "on a layer that is off or frozen": 113}
+    assert skipped == {"on a layer that is off or frozen": 113}
     assert len(model.by_type("IfcAnnotation")) == 2152
     assert {layer.Name for layer in model.by_type("IfcPresentationLayerAssignment")} >= {"A-WALL", "A-DOOR", "A-GLAZ"}
     assert len(model.by_type("IfcStyledItem")) > 1700  # everything but text
@@ -99,3 +100,20 @@ def test_unknown_entities_are_drawn_from_their_proxy_graphics():
     assert "EPDM ROOF CONSTRUCTION:" in {part.get("text") for e in leaders for part in e["parts"]}
     text, skipped = convert((ASSETS / "architectural_-_annotation_scaling_and_multileaders.dwg").read_bytes())
     assert "MULTILEADER" not in skipped and "'EPDM ROOF CONSTRUCTION:'" in text
+
+
+def test_title_block_drawings_export_their_layouts():
+    # nothing in model space: the drawing is its paper-space layouts, one storey each
+    sample = ASSETS / "LACPW_LDD_SEWER_BORDER.dwg"
+    if not sample.exists():
+        pytest.skip("sample not present")
+    model = ifcopenshell.file.from_string(convert(sample.read_bytes())[0])
+    assert [storey.Name for storey in model.by_type("IfcBuildingStorey")] == ["Layout 1", "Layout 2"]
+    assert len(model.by_type("IfcAnnotation")) > 500
+
+
+def test_no_sample_reports_unconverted_drawing_entities():
+    # across all samples only lights (nothing to draw) and hidden layers may be reported
+    for sample in ASSETS.glob("*.dwg"):
+        skipped = convert(sample.read_bytes())[1]
+        assert set(skipped) <= {"LIGHT", "on a layer that is off or frozen"}, sample.name
