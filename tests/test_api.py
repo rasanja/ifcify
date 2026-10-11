@@ -35,7 +35,8 @@ def test_rejects_non_dwg():
 
 
 def test_rejects_truncated_dwg():
-    assert client.post("/convert", content=SAMPLES[-1].read_bytes()[:5000]).status_code == 422
+    fixture = Path(__file__).parent / "fixtures" / "entities_2018.dwg"
+    assert client.post("/convert", content=fixture.read_bytes()[:5000]).status_code == 422
 
 
 def test_path_cannot_escape_root():

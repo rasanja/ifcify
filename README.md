@@ -59,15 +59,14 @@ There is one endpoint, `POST /convert`. Give it the drawing in either of two way
 Send the DWG bytes as the request body:
 
 ```sh
-curl --data-binary @sample-assets/building001-0_floor1.dwg \
-     -o floor1.ifc http://127.0.0.1:8000/convert
+curl --data-binary @drawing.dwg -o drawing.ifc http://127.0.0.1:8000/convert
 ```
 
 Or name a file under `DWG2IFC_ROOT`:
 
 ```sh
-DWG2IFC_ROOT=sample-assets uv run dwg2ifc
-curl -X POST -o floor1.ifc "http://127.0.0.1:8000/convert?path=building001-0_floor1.dwg"
+DWG2IFC_ROOT=/path/to/drawings uv run dwg2ifc
+curl -X POST -o drawing.ifc "http://127.0.0.1:8000/convert?path=drawing.dwg"
 ```
 
 The response body is the IFC file (STEP text, `application/x-step`). Two headers describe the result:

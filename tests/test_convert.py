@@ -3,10 +3,13 @@ from pathlib import Path
 
 import ifcopenshell
 import ifcopenshell.validate
+import pytest
 
 from dwg2ifc import convert, entities
 
 ASSETS = Path(__file__).parent.parent / "sample-assets"
+# the sample drawings are not in the repository; these tests run only where they have been copied in
+pytestmark = pytest.mark.skipif(not list(ASSETS.glob("*.dwg")), reason="sample-assets/ is not present")
 
 
 def test_floor_plan_entities_decode_exactly():
