@@ -549,7 +549,7 @@ _FIXED_ENTITIES = {*range(0x01, 0x2A), 0x2B, 0x2C, 0x2D, 0x2E, 0x2F, 0x4A, 0x4D,
 class Obj:
     """One object's header plus readers positioned on its data, string and handle streams."""
 
-    __slots__ = ("type", "handle", "r", "strings", "handles", "end", "unicode", "release", "is_entity", "start")
+    __slots__ = ("type", "handle", "r", "strings", "handles", "end", "unicode", "release", "is_entity", "start", "eed")
 
     def set_size(self, bits: int) -> None:
         """R13/R14 store the data size after the header fields, so the handle stream is located late."""
@@ -591,9 +591,9 @@ def read_object(objects: bytes, loc: int, release: str, names: dict[int, tuple[s
             end = o.start + o.r.rl()
     o.type, o.is_entity = names.get(number) or (FIXED_TYPES.get(number, f"TYPE_{number}"), number in _FIXED_ENTITIES)
     o.handle = o.r.h()
-    while eed_size := o.r.bs():  # extended entity data: app handle + bytes, repeated
-        o.r.h()
-        o.r.p += eed_size * 8
+    o.eed = []  # extended entity data (xdata): (application handle, raw bytes), repeated
+    while eed_size := o.r.bs():
+        o.eed.append((o.r.h(), o.r.raw(eed_size)))
     o.end = o.handles = None  # R13/R14: set_size() fills these once the size field is reached
     if end is not None:
         o.handles = Bits(objects, end)

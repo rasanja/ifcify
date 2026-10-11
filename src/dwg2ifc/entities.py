@@ -1,6 +1,7 @@
 """Decodes DWG objects into plain dicts (spec chapter 20.4)."""
 
 import math
+import struct
 from collections import Counter
 
 from dwg2ifc import acis, datastore, dwg, header, proxy
@@ -14,6 +15,7 @@ class Drawing:
         self.metric = False  # MEASUREMENT: fallback when the drawing declares no units
         self.layers: dict[int, dict] = {}  # handle -> {name, color, lineweight, off, frozen, locked}
         self.blocks: dict[int, dict] = {}  # block header handle -> {name, base, units}
+        self.apps: dict[int, str] = {}  # registered application handle -> name, for xdata
         self.dimstyles: dict[int, dict] = {}  # handle -> {scale, arrow, text}
         self.spaces: dict[str, int] = {}  # "model" and "paper" -> block header handle, from the block table
         self.entities: list[dict] = []  # each has type, handle, owner (block header handle), layer
@@ -231,6 +233,8 @@ def _entity_common(o: dwg.Obj) -> dict:
     lineweight = r.rc() if since(release, "R2000") else 29  # 29: by layer
 
     e = {"type": o.type, "handle": o.handle, "invisible": invisible, "graphics": graphics, "color": color, "lineweight": lineweight}
+    if o.eed:
+        e["xdata"] = [(app, xdata(raw, o.unicode)) for app, raw in o.eed]
     e["owner"] = hr.h(o.handle) if entmode == 0 else {1: "paper", 2: "model"}.get(entmode)
     for _ in range(reactors):
         hr.h()
@@ -537,9 +541,64 @@ def _text(o, r):
 
 
 def _attrib(o, r):
+    """A block attribute: text drawn with an insert, plus the tag that names it (door number, room name, ...)."""
     e = _text(o, r)
-    o.r.p = o.end  # tag, prompt and flags are not needed to draw the value
+    multiline = False
+    if since(o.release, "R2010"):
+        r.rc()  # version
+    if since(o.release, "R2018"):
+        multiline = r.rc() != 1
+    e["tag"] = ""
+    if not multiline:  # shortcut: a multiline attribute embeds a whole MTEXT; its value is read but not its tag
+        e["tag"] = o.text()
+        r.bs()  # field length
+        e["hidden"] = bool(r.rc() & 1)  # the "invisible" attribute flag: data only, not drawn
+    o.r.p = o.end
     return e
+
+
+def xdata(raw: bytes, unicode: bool) -> list:
+    """Extended entity data items as (DXF group code, value) (spec chapter 28)."""
+    out, i = [], 0
+    try:
+        while i < len(raw):
+            code = raw[i]
+            i += 1
+            if code == 0:
+                if unicode:
+                    n = int.from_bytes(raw[i : i + 2], "little")
+                    out.append((1000, raw[i + 2 : i + 2 + 2 * n].decode("utf-16-le", "replace")))
+                    i += 2 + 2 * n
+                else:
+                    n = raw[i]
+                    out.append((1000, raw[i + 3 : i + 3 + n].decode("cp1252", "replace")))
+                    i += 3 + n
+            elif code == 2:
+                out.append((1002, "}" if raw[i] else "{"))
+                i += 1
+            elif code in (3, 5):
+                out.append((1000 + code, f"{int.from_bytes(raw[i : i + 8], 'big'):X}"))
+                i += 8
+            elif code == 4:
+                out.append((1004, raw[i + 1 : i + 1 + raw[i]].hex()))
+                i += 1 + raw[i]
+            elif 10 <= code <= 13:
+                out.append((1000 + code, struct.unpack_from("<3d", raw, i)))
+                i += 24
+            elif 40 <= code <= 42:
+                out.append((1000 + code, struct.unpack_from("<d", raw, i)[0]))
+                i += 8
+            elif code == 70:
+                out.append((1070, struct.unpack_from("<h", raw, i)[0]))
+                i += 2
+            elif code == 71:
+                out.append((1071, struct.unpack_from("<i", raw, i)[0]))
+                i += 4
+            else:
+                break
+    except (IndexError, struct.error):
+        pass
+    return out
 
 
 def _mtext(o, r):
@@ -800,6 +859,8 @@ def load(data: bytes) -> Drawing:
                     drawing.dimstyles[o.handle] = _dimstyle(o)
                 except ValueError:
                     pass  # sizes fall back to defaults
+            elif o.type == "APPID":
+                drawing.apps[o.handle] = _table_name(o)
             elif o.type == "BLOCK_CONTROL":
                 drawing.spaces = _block_control(o)
             elif o.type == "BLOCK_HEADER":
@@ -839,5 +900,8 @@ def load(data: bytes) -> Drawing:
         entity["owner"] = spaces.get(entity["owner"], entity["owner"])
     for entity in drawing.entities:
         if entity["type"] == "ATTRIB":  # owned by its INSERT, but drawn in the INSERT's space
+            entity["insert"] = entity["owner"]
+            if entity.get("hidden"):
+                entity["invisible"] = 1
             entity["owner"] = by_handle.get(entity["owner"], {}).get("owner")
     return drawing

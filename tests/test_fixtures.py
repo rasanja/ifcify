@@ -9,6 +9,7 @@ from collections import Counter
 from pathlib import Path
 
 import ifcopenshell
+import ifcopenshell.util.element
 import pytest
 
 from dwg2ifc import convert, entities, ifc
@@ -218,3 +219,20 @@ def test_dimension_without_its_block_is_drawn_from_its_points(path):
     assert "10" in found
     assert ((0.0, -5.0, 0.0), (10.0, -5.0, 0.0)) in found  # the dimension line
     assert ((0.0, 0.0, 0.0), (0.0, -5.0, 0.0)) in found  # an extension line
+
+
+@pytest.mark.parametrize("path", RELEASES, ids=lambda p: p.stem)
+def test_properties_reach_the_ifc(path):
+    """Layer, colour, block name and block attributes are carried as property sets."""
+    model = ifcopenshell.file.from_string(convert(path.read_bytes())[0])
+    psets = [ifcopenshell.util.element.get_psets(p) for p in model.by_type("IfcProduct") if p.ObjectType in ("INSERT", "MINSERT")]
+    # the script inserts block SYMBOL five times, typing an attribute value each time
+    assert sorted(p["DWG_Attributes"]["TAG1"] for p in psets) == ["Grid", "Mirrored", "Tilted", "Value A", "Value B"]
+    assert {p["DWG_Block"]["BlockName"] for p in psets} == {"SYMBOL"}
+    red = next(p for p in model.by_type("IfcProduct") if p.ObjectType == "CIRCLE"
+               and ifcopenshell.util.element.get_psets(p)["DWG_Entity"]["Layer"].upper() == "REDLAYER")  # fmt: skip
+    assert ifcopenshell.util.element.get_psets(red)["DWG_Entity"] | {"id": 0, "Layer": "REDLAYER"} == {
+        "id": 0, "Layer": "REDLAYER", "EntityType": "CIRCLE", "Colour": "255,0,0",
+    }  # fmt: skip
+    solids = [p for p in model.by_type("IfcBuildingElementProxy") if p.ObjectType == "3DSOLID"]
+    assert solids and all(p.Tag and p.Name.endswith(":" + p.Tag) for p in solids)  # the DWG handle

@@ -181,6 +181,12 @@ class _Builder:
         self.layer_items = defaultdict(list)
         self.maps: dict[int, object] = {}  # block handle -> IfcRepresentationMap, or None if empty
         self.styles: dict[tuple, object] = {}  # (kind, colour, width) -> shared style entity
+        self.values: dict[tuple, object] = {}  # (name, value) -> shared IfcPropertySingleValue
+        self.described = defaultdict(list)  # (layer, entity type, colour) -> products with those properties
+        self.attributes = defaultdict(list)  # insert handle -> [(tag, value)] from its block attributes
+        for e in drawing.entities:
+            if e["type"] == "ATTRIB" and e.get("tag"):
+                self.attributes[e.get("insert")].append((e["tag"], e["text"]))
 
         project = ifcopenshell.api.root.create_entity(f, ifc_class="IfcProject", name=name)
         model_space = drawing.block_named("*Model_Space")
@@ -243,11 +249,50 @@ class _Builder:
                 create = f.createIfcBuildingElementProxy if representation.RepresentationIdentifier == "Body" else f.createIfcAnnotation
                 placement = f.createIfcLocalPlacement(storey.ObjectPlacement, self.origin)
                 products.append(create(ifcopenshell.guid.new(), None, f"{e['type']}:{e['handle']:X}", None, e["type"], placement, shape))
+                self.describe(e, products[-1])
             if products:
                 f.createIfcRelContainedInSpatialStructure(ifcopenshell.guid.new(), None, None, None, products, storey)
+        for (layer, kind, colour), described in self.described.items():
+            self.property_set("DWG_Entity", {"Layer": layer, "EntityType": kind, "Colour": colour}, described)
         for name, items in self.layer_items.items():
             if items:  # a layer whose entities all came out empty has nothing to assign
                 f.createIfcPresentationLayerAssignment(name, None, items, None)
+
+    def property_set(self, name, values: dict, products) -> None:
+        f = self.f
+        properties = []
+        for key, value in values.items():
+            if (key, value) not in self.values:
+                self.values[key, value] = f.createIfcPropertySingleValue(key, None, f.createIfcText(str(value)), None)
+            properties.append(self.values[key, value])
+        if properties:
+            pset = f.createIfcPropertySet(ifcopenshell.guid.new(), None, name, None, properties)
+            f.createIfcRelDefinesByProperties(ifcopenshell.guid.new(), None, None, None, products, pset)
+
+    def describe(self, e, product) -> None:
+        """What the DWG knows about an entity beyond its shape, as IFC properties."""
+        layer = self.d.layers.get(e["layer"], {})
+        colour = e["color"] or layer.get("color", 7)
+        colour = "by block" if e["color"] == 0 else ",".join(map(str, _rgb(colour)))
+        # shared by every entity with the same layer, type and colour; the handle is in the product's name
+        self.described[layer.get("name", "0"), e["type"], colour].append(product)
+        if product.is_a("IfcElement"):
+            product.Tag = f"{e['handle']:X}"
+        block = self.d.blocks.get(e.get("block"))
+        if block and not block["name"].startswith("*"):
+            self.property_set("DWG_Block", {"BlockName": block["name"]}, [product])
+        tags = {}
+        for tag, value in self.attributes.get(e["handle"], ()):
+            n = sum(1 for k in tags if k == tag or k.startswith(tag + "_"))
+            tags[tag if not n else f"{tag}_{n + 1}"] = value  # a block may repeat a tag
+        if tags:
+            self.property_set("DWG_Attributes", tags, [product])
+        for app, items in e.get("xdata", ()):
+            name = self.d.apps.get(app, "")
+            # shortcut: AutoCAD's own bookkeeping apps are left out; only other programs' data is carried over
+            if name and not name.upper().startswith(("ACAD", "ACDB", "GRADIENTCOLOR")):
+                listed = "; ".join(f"{code}={value}" for code, value in items)
+                self.property_set("DWG_XData", {name: listed}, [product])
 
     def representation(self, items):
         groups = defaultdict(list)
