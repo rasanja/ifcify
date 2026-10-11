@@ -23,6 +23,23 @@ DWG releases R14, R2000, R2004, R2007, R2010, R2013 and R2018.
 | Colours and line weights | `IfcStyledItem` with curve, fill or surface styles |
 | Drawing units | IFC length unit |
 
+## Building elements
+
+A DWG holds lines on layers, not walls and rooms. The converter adds building information in three ways:
+
+- **Properties.** Every object carries its layer, entity type and colour. Block inserts carry their block name
+  and their attributes (door numbers, room data). Data attached by other programs is carried over too.
+- **Classes and types from names.** A layer or block whose name says what it is (`A-DOOR`, `Windows`,
+  `PRTA0001`, `Fluorescent Fixture`) makes its solids and block inserts IFC doors, windows, light fixtures,
+  furniture and so on. Each named block becomes a type and its inserts occurrences of it.
+- **Elements derived from plans.** Room outlines become `IfcSpace` with a name and floor area. Pairs of
+  parallel lines on wall layers become `IfcWall` with a thickness and a wall type. Closed shapes on column
+  layers become `IfcColumn`. The original linework is kept alongside.
+
+Derived elements are an interpretation and are marked as such. Their height is an assumed 3 m, because a plan
+does not give one. Recognition depends on layer and block naming, so a drawing with meaningless names
+produces drafting and generic objects only. Import into Revit has not been tested.
+
 Model space goes into one storey: `IfcProject > IfcSite > IfcBuilding > IfcBuildingStorey`. A drawing
 with nothing in model space, such as a title block, is exported as its paper-space layouts instead,
 one storey per layout.
