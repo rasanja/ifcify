@@ -61,8 +61,10 @@ converter puts in fixed values:
 
 What this means in practice:
 
-- Do not take heights, volumes, wall areas or anything computed from them out of the IFC. Plan
-  quantities (lengths, thicknesses, floor areas) are real.
+- Everything measured in plan is real: lengths, widths, thicknesses, and floor areas, which are length
+  times width.
+- Only what involves the vertical direction is not: heights, volumes, and the area of a wall's face
+  (its length times its assumed height). Do not take those out of the IFC.
 - Each derived element says so in its properties: `DWG_Derived.Height` or `DWG_Room.Height` reads
   "assumed ...". Elements converted from real 3D solids in the drawing are not affected; their sizes are
   the drawing's.
