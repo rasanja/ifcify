@@ -10,6 +10,8 @@ drawings/
 
 # coding-agent and editor state
 .claude/
+CLAUDE.md
+AGENTS.md
 .cursor/
 .codex/
 .gemini/

@@ -184,6 +184,3 @@ release, and validate the IFC output against the schema.
 
 `tools/make_fixtures.sh` rebuilds the test drawings in `tests/fixtures`. It is the only part that needs
 AutoCAD (2027, on macOS) and is not needed to run the service or the tests.
-
-`CLAUDE.md` holds the design notes: how correctness is checked, the IFC mapping, known gaps, the
-roadmap, and the places where the published DWG specification turned out to be wrong.
