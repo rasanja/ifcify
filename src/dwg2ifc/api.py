@@ -3,6 +3,7 @@ from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query, Request, Response
+from fastapi.concurrency import run_in_threadpool
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.staticfiles import StaticFiles
 
@@ -34,6 +35,24 @@ def _root() -> Path:
     return Path(os.environ.get("DWG2IFC_ROOT", ".")).resolve()
 
 
+def _limit() -> int:
+    """Largest drawing accepted, in bytes. A converted drawing takes many times its size in memory."""
+    return int(float(os.environ.get("DWG2IFC_MAX_MB", "100")) * 1024 * 1024)
+
+
+async def _body(request: Request) -> bytes:
+    """The request body, refused as soon as it is known to be too large."""
+    limit = _limit()
+    if int(request.headers.get("content-length") or 0) > limit:
+        raise HTTPException(413, "drawing is larger than DWG2IFC_MAX_MB")
+    data = bytearray()
+    async for chunk in request.stream():
+        data += chunk
+        if len(data) > limit:
+            raise HTTPException(413, "drawing is larger than DWG2IFC_MAX_MB")
+    return bytes(data)
+
+
 def _read_ref(ref: str) -> bytes:
     # path references are confined to DWG2IFC_ROOT so callers cannot read arbitrary files
     path = (_root() / ref).resolve()
@@ -41,6 +60,8 @@ def _read_ref(ref: str) -> bytes:
         raise HTTPException(403, "path is outside DWG2IFC_ROOT")
     if not path.is_file():
         raise HTTPException(404, "no such file")
+    if path.stat().st_size > _limit():
+        raise HTTPException(413, "drawing is larger than DWG2IFC_MAX_MB")
     return path.read_bytes()
 
 
@@ -59,6 +80,7 @@ def _read_ref(ref: str) -> bytes:
         },
         403: {"description": "`path` points outside DWG2IFC_ROOT."},
         404: {"description": "`path` does not exist."},
+        413: {"description": "The drawing is larger than DWG2IFC_MAX_MB (default 100)."},
         422: {"description": "The input is not a DWG file, is a release not supported yet, or is corrupt."},
     },
     openapi_extra={
@@ -73,9 +95,10 @@ async def convert_dwg(
     path: str | None = Query(None, description="DWG file to read instead of the body, relative to the server's DWG2IFC_ROOT directory."),
 ) -> Response:
     """Send the DWG either as the raw request body or by reference with `path`."""
-    data = _read_ref(path) if path else await request.body()
+    data = _read_ref(path) if path else await _body(request)
     try:
-        ifc, skipped = convert(data, Path(path).stem if path else "drawing")
+        # off the event loop, so one large drawing does not stall other requests
+        ifc, skipped = await run_in_threadpool(convert, data, Path(path).stem if path else "drawing")
     except ValueError as e:
         raise HTTPException(422, str(e)) from None
     headers = {"X-DWG-Version": dwg.version(data), "X-DWG-Skipped": ", ".join(f"{k}={v}" for k, v in sorted(skipped.items()))}

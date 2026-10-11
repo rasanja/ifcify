@@ -39,6 +39,14 @@ def test_rejects_truncated_dwg():
     assert client.post("/convert", content=fixture.read_bytes()[:5000]).status_code == 422
 
 
+def test_refuses_oversized_drawings(monkeypatch):
+    monkeypatch.setenv("DWG2IFC_MAX_MB", "0.001")
+    fixture = Path(__file__).parent / "fixtures" / "entities_2018.dwg"
+    assert client.post("/convert", content=fixture.read_bytes()).status_code == 413
+    monkeypatch.setenv("DWG2IFC_ROOT", str(fixture.parent))
+    assert client.post("/convert", params={"path": fixture.name}).status_code == 413
+
+
 def test_path_cannot_escape_root():
     assert client.post("/convert", params={"path": "../pyproject.toml"}).status_code == 403
 

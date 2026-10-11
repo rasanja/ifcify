@@ -88,6 +88,7 @@ and work offline.
 | `DWG2IFC_HOST` | `127.0.0.1` | Address to listen on. The Docker image sets `0.0.0.0` |
 | `DWG2IFC_PORT` | `8000` | Port to listen on |
 | `DWG2IFC_ROOT` | current directory | Directory that `?path=` references are read from |
+| `DWG2IFC_MAX_MB` | `100` | Largest drawing accepted, in megabytes |
 
 ## Use
 
@@ -120,6 +121,7 @@ Add `-D -` to `curl` to see them.
 | 200 | Converted |
 | 403 | `path` points outside `DWG2IFC_ROOT` |
 | 404 | `path` does not exist |
+| 413 | The drawing is larger than `DWG2IFC_MAX_MB` |
 | 422 | Not a DWG file, an unsupported release, or a corrupt file |
 
 From Python, without the web service:
@@ -134,8 +136,8 @@ Path("drawing.ifc").write_text(ifc_text)
 
 ## Limits
 
-- No request size limit or timeout yet; run it on a trusted machine.
-- Password-protected drawings are rejected.
+- There is a size limit but no time limit on a conversion; run it on a trusted machine.
+- Password-protected drawings are rejected; they are out of scope.
 - DWG R13 uses the R14 code path and is untested.
 - Solids saved in R2004 or earlier lose their rounded (filleted) faces; the rest of the solid converts.
 - IFC4X3 has no cone surface, so cone faces are written as surfaces of revolution. Viewer support for that varies.
