@@ -95,12 +95,12 @@ def spaces(drawing, owner, smallest: float) -> list[dict]:
             cy = sum(p[1] for p in outline) / len(outline)
             grain = math.sqrt(size) / 100  # the same room drawn again on another layer lands in the same cell
             key = (round(cx / grain), round(cy / grain), round(size / (grain * grain) / 100))
-            if key in seen:
+            if key in seen and not drawing.fields.get(e["handle"]):
                 continue
             seen.add(key)
             found.append({"points": [p[:2] for p in points], "bulges": list(bulges), "outline": outline, "area": size,
                           "elevation": e.get("elevation", 0.0), "handle": e["handle"], "layer": e["layer"],
-                          "xdata": e.get("xdata", ())})  # fmt: skip
+                          "xdata": e.get("xdata", ()), "stored": list(drawing.fields.get(e["handle"], ()))})  # fmt: skip
 
     for room in found:
         xs, ys = [p[0] for p in room["outline"]], [p[1] for p in room["outline"]]
@@ -116,14 +116,17 @@ def spaces(drawing, owner, smallest: float) -> list[dict]:
         room["name"] = numbers[0] if numbers else (texts[0].split("\n")[0][:40] if texts else "")
         room["labels"] = texts
         room["centre"] = ((box[0] + box[2]) / 2, (box[1] + box[3]) / 2)
-    rooms, named = [], set()
+    rooms, named = [], {}
     for room in sorted(found, key=lambda r: r["area"]):
         if sum(1 for other in rooms if inside(other["centre"], room["outline"])) >= 3:
             continue  # encloses several rooms: a gross-area or zone outline, not a room
         key = (room["name"], round(math.log(room["area"]) * 20))  # same name, area within about 5 percent
         if room["name"] and key in named:
-            continue  # the same room drawn again, as a hatch on a colour-coding layer
-        named.add(key)
+            # the same room drawn again, as a hatch on a colour-coding layer; keep what either copy stores
+            named[key]["stored"] += room["stored"]
+            named[key]["xdata"] = list(named[key]["xdata"]) + list(room["xdata"])
+            continue
+        named[key] = room
         rooms.append(room)
     return rooms
 

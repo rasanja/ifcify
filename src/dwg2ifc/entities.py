@@ -1,6 +1,7 @@
 """Decodes DWG objects into plain dicts (spec chapter 20.4)."""
 
 import math
+import re
 import struct
 from collections import Counter
 
@@ -15,6 +16,7 @@ class Drawing:
         self.metric = False  # MEASUREMENT: fallback when the drawing declares no units
         self.layers: dict[int, dict] = {}  # handle -> {name, color, lineweight, off, frozen, locked}
         self.blocks: dict[int, dict] = {}  # block header handle -> {name, base, units}
+        self.fields: dict[int, list] = {}  # object handle -> [(property, value as the drawing last computed it)]
         self.linetypes: dict[int, dict] = {}  # handle -> {name, dashes}; a dash is a length, negative for a gap
         self.apps: dict[int, str] = {}  # registered application handle -> name, for xdata
         self.dimstyles: dict[int, dict] = {}  # handle -> {scale, arrow, text}
@@ -167,6 +169,33 @@ def _layer(o: dwg.Obj) -> dict:
             "linetype": o.handles.h(o.handle)}  # fmt: skip
 
 
+def _field(o: dwg.Obj) -> list:
+    """A field that reports a property of other objects, such as a polyline's area: [(object, property, value)].
+
+    AutoCAD stores the result it last computed next to the formula, so the value is the drawing's own.
+    """
+    skip = _object_common(o)
+    if not o.unicode or o.strings is None:
+        return []  # shortcut: before R2007 the cached value sits behind fields we do not step through
+    strings = []
+    try:
+        while len(strings) < 12:
+            strings.append(o.strings.tu())
+    except ValueError:
+        pass
+    if len(strings) < 2 or strings[0] != "AcObjProp":
+        return []
+    named = re.search(r"\)\.(\w+)", strings[1])
+    value = next((t for t in strings[2:] if t and not t.startswith("%") and t != "ObjectPropertyId"), None)
+    if not named or value is None:
+        return []
+    children = o.r.bl()
+    objects = o.r.bl()
+    for _ in range(1 + skip + children):
+        o.handles.h(o.handle)
+    return [(o.handles.h(o.handle), named.group(1), value) for _ in range(min(objects, 16))]
+
+
 def _linetype(o: dwg.Obj) -> dict:
     name = _table_name(o)
     r = o.r
@@ -283,7 +312,9 @@ def _entity_common(o: dwg.Obj) -> dict:
 
 
 def _thickness(o) -> float:
-    return o.r.bt() if since(o.release, "R2000") else o.r.bd()
+    """How far a flat entity is extruded upwards, which is how some drawings record a height."""
+    o.thickness = o.r.bt() if since(o.release, "R2000") else o.r.bd()
+    return o.thickness
 
 
 def _extrusion(o) -> tuple:
@@ -301,7 +332,7 @@ def _owned(o: dwg.Obj) -> dict:
 def _line(o, r):
     if not since(o.release, "R2000"):
         e = {"start": r.bd3(), "end": r.bd3()}
-        r.bd()  # thickness
+        _thickness(o)
         return e | {"extrusion": r.bd3()}
     z_is_zero = r.b()
     x1 = r.rd()
@@ -312,7 +343,7 @@ def _line(o, r):
     if not z_is_zero:
         z1 = r.rd()
         z2 = r.dd(z1)
-    r.bt()
+    _thickness(o)
     return {"start": (x1, y1, z1), "end": (x2, y2, z2), "extrusion": r.be()}
 
 
@@ -341,11 +372,10 @@ def _ellipse(o, r):
 
 def _lwpolyline(o, r):
     flag = r.bs()
-    if flag & 4:
-        r.bd()  # constant width
+    width = r.bd() if flag & 4 else 0.0  # one width for the whole polyline
     elevation = r.bd() if flag & 8 else 0.0
     if flag & 2:
-        r.bd()  # thickness
+        o.thickness = r.bd()
     extrusion = r.bd3() if flag & 1 else (0.0, 0.0, 1.0)
     n = r.bl()
     n_bulges = r.bl() if flag & 16 else 0
@@ -361,15 +391,20 @@ def _lwpolyline(o, r):
     bulges = [r.bd() for _ in range(n_bulges)]
     for _ in range(n_ids):
         r.bl()
-    for _ in range(n_widths):
-        r.bd(), r.bd()
-    return {"points": points, "bulges": bulges, "closed": bool(flag & 512), "elevation": elevation, "extrusion": extrusion}
+    widths = {(r.bd(), r.bd()) for _ in range(n_widths)}
+    if len(widths) == 1 and len(set(*widths)) == 1:
+        width = widths.pop()[0]  # every vertex has the same start and end width
+    return {"points": points, "bulges": bulges, "closed": bool(flag & 512), "elevation": elevation, "extrusion": extrusion,
+            "width": width}  # fmt: skip
 
 
 def _polyline_2d(o, r):
     flags = r.bs()
-    r.bs(), r.bd(), r.bd(), _thickness(o)  # curve type, start and end width, thickness
-    return {"closed": bool(flags & 1), "elevation": r.bd(), "extrusion": _extrusion(o)} | _owned(o)
+    r.bs()  # curve type
+    start_width, end_width = r.bd(), r.bd()
+    _thickness(o)
+    return {"closed": bool(flags & 1), "elevation": r.bd(), "extrusion": _extrusion(o),
+            "width": start_width if start_width == end_width else 0.0} | _owned(o)  # fmt: skip
 
 
 def _polyline_3d(o, r):
@@ -534,7 +569,8 @@ def _text(o, r):
         elevation, point = r.bd(), r.rd2()
         r.rd2()  # alignment point
         extrusion = r.bd3()
-        r.bd(), r.bd()  # thickness, oblique angle
+        o.thickness = r.bd()
+        r.bd()  # oblique angle
         rotation, height = r.bd(), r.bd()
         r.bd()  # width factor
         text = o.text()
@@ -546,7 +582,7 @@ def _text(o, r):
     if not flags & 2:
         r.dd(point[0]), r.dd(point[1])  # alignment point
     extrusion = r.be()
-    r.bt()
+    _thickness(o)
     if not flags & 4:
         r.rd()  # oblique angle
     rotation = 0.0 if flags & 8 else r.rd()
@@ -627,7 +663,9 @@ def _mtext(o, r):
     if since(o.release, "R2007"):
         r.bd()  # rectangle height
     e["height"] = r.bd()
-    r.bs(), r.bs(), r.bd(), r.bd()  # attachment, drawing direction, extents
+    r.bs(), r.bs()  # attachment, drawing direction
+    extent_height, extent_width = r.bd(), r.bd()
+    e["extent"] = (extent_width, extent_height)  # the box AutoCAD measured around the text as drawn
     e["text"] = o.text()
     o.r.p = o.end  # the remaining fields are layout details we do not use
     return e
@@ -879,6 +917,9 @@ def load(data: bytes) -> Drawing:
                     drawing.dimstyles[o.handle] = _dimstyle(o)
                 except ValueError:
                     pass  # sizes fall back to defaults
+            elif o.type == "FIELD":
+                for target, name, value in _field(o):
+                    drawing.fields.setdefault(target, []).append((name, value))
             elif o.type == "LTYPE":
                 try:
                     drawing.linetypes[o.handle] = _linetype(o)
@@ -896,6 +937,8 @@ def load(data: bytes) -> Drawing:
                 entity |= _DECODERS[o.type](o, o.r)
                 if o.r.p != o.end:
                     raise ValueError(f"{o.type} {o.handle:X} decoded to bit {o.r.p}, expected {o.end}")
+                if o.thickness:
+                    entity["thickness"] = o.thickness
                 drawing.entities.append(entity)
             elif o.is_entity and o.type not in _STRUCTURAL:
                 # a type we do not decode: draw it from the picture of itself it carries, if it has one

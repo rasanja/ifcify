@@ -337,6 +337,13 @@ class _Builder:
             tags[tag if not n else f"{tag}_{n + 1}"] = value  # a block may repeat a tag
         if tags:
             self.property_set("DWG_Attributes", tags, [product])
+        stored = {f"Stored{name}": value for name, value in dict(self.d.fields.get(e["handle"], ())).items()}
+        if e.get("thickness"):
+            stored["Thickness"] = e["thickness"]
+        if e.get("width", 0) > 0:
+            stored["Width"] = e["width"]
+        if stored:  # values the drawing holds for this entity that its shape alone does not show
+            self.property_set("DWG_Stored", stored, [product])
         self.xdata(e, product)
 
     def xdata(self, e, product) -> None:
@@ -383,7 +390,9 @@ class _Builder:
             self.property_set(
                 "DWG_Room",
                 {"Labels": " | ".join(room["labels"]), "OutlineLayer": layer, "OutlineHandle": f"{room['handle']:X}",
-                 "Height": "assumed 3 m; the drawing does not give one"},
+                 "Height": "assumed 3 m; the drawing does not give one"}
+                # values AutoCAD itself computed and stored in the drawing for this outline, as text in its format
+                | {f"Stored{name}": value for name, value in dict(room["stored"]).items()},
                 [space],
             )  # fmt: skip
             self.xdata(room, space)
@@ -649,6 +658,8 @@ class _Builder:
         color = e["color"] or layer.get("color", 7)
         code = e["lineweight"] if e["lineweight"] < 29 else layer.get("lineweight", 31)
         width = _LINEWEIGHTS[code] / 100 * self.millimetre if code < len(_LINEWEIGHTS) and _LINEWEIGHTS[code] else None
+        if e.get("width", 0) > 0:
+            width = e["width"]  # a wide polyline: its drawn width, in drawing units, rather than a plotting weight
         font = self.curve_font(self.linetype(e, layer))
         f = self.f
         for item in items:
@@ -1052,8 +1063,11 @@ class _Builder:
         lines = text.split("\n")
         if not text.strip() or e["height"] <= 0:
             return None
-        # shortcut: extent is estimated at 0.6 x height per character, measure real glyphs if layout matters
-        extent = self.f.createIfcPlanarExtent(0.6 * e["height"] * max(map(len, lines)), 1.5 * e["height"] * len(lines))
+        width, tall = e.get("extent", (0.0, 0.0))
+        if width <= 0 or tall <= 0:
+            # shortcut: single-line text stores no size, so its box is estimated at 0.6 x height per character
+            width, tall = 0.6 * e["height"] * max(map(len, lines)), 1.5 * e["height"] * len(lines)
+        extent = self.f.createIfcPlanarExtent(float(width), float(tall))
         placement = self.placement((x_axis, None, _unit(e["extrusion"])), point)
         return self.f.createIfcTextLiteralWithExtent(text, placement, "RIGHT", extent, alignment)
 

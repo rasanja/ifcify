@@ -135,6 +135,13 @@ def test_floor_plan_rooms_become_spaces():
     # the drawing labels this room "405 SF"
     assert abs(psets["Qto_SpaceBaseQuantities"]["NetFloorArea"] / 0.3048**2 - 405) < 1
     assert "405 SF" in psets["DWG_Room"]["Labels"]
+    # the drawing stores each outline's area in a field object; that value is carried as it is
+    assert psets["DWG_Room"]["StoredArea"] == "405 SF"
+    stored = [s for s in spaces.values() if "StoredArea" in ifcopenshell.util.element.get_psets(s)["DWG_Room"]]
+    assert len(stored) == 66  # five rooms have no area field
+    for space in stored:  # and our own measurement agrees with it, to the whole square foot it is rounded to
+        values = ifcopenshell.util.element.get_psets(space)
+        assert abs(values["Qto_SpaceBaseQuantities"]["NetFloorArea"] / 0.3048**2 - float(values["DWG_Room"]["StoredArea"].split()[0].replace(",", ""))) <= 0.5
 
 
 def test_plan_walls_become_ifc_walls():
