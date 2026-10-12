@@ -337,7 +337,7 @@ class _Builder:
             tags[tag if not n else f"{tag}_{n + 1}"] = value  # a block may repeat a tag
         if tags:
             self.property_set("DWG_Attributes", tags, [product])
-        stored = {f"Stored{name}": value for name, value in dict(self.d.fields.get(e["handle"], ())).items()}
+        stored = {f"Stored{name}": value for name, value, _ in self.d.fields.get(e["handle"], ())}
         if e.get("thickness"):
             stored["Thickness"] = e["thickness"]
         if e.get("width", 0) > 0:
@@ -382,7 +382,9 @@ class _Builder:
                 ),
                 CompositionType="ELEMENT",
             )
-            square_metres = room["area"] * self.metres**2
+            # the area AutoCAD itself stored for the outline, when there is one; otherwise ours, measured from it
+            stored = next((number for name, _, number in room["stored"] if name == "Area" and number), None)
+            square_metres = (stored or room["area"]) * self.metres**2
             quantity = f.createIfcQuantityArea("NetFloorArea", None, None, square_metres, None)
             sizes = f.createIfcElementQuantity(ifcopenshell.guid.new(), None, "Qto_SpaceBaseQuantities", None, None, [quantity])
             f.createIfcRelDefinesByProperties(ifcopenshell.guid.new(), None, None, None, [space], sizes)
@@ -392,7 +394,8 @@ class _Builder:
                 {"Labels": " | ".join(room["labels"]), "OutlineLayer": layer, "OutlineHandle": f"{room['handle']:X}",
                  "Height": "assumed 3 m; the drawing does not give one"}
                 # values AutoCAD itself computed and stored in the drawing for this outline, as text in its format
-                | {f"Stored{name}": value for name, value in dict(room["stored"]).items()},
+                | {"AreaSource": "stored in the drawing by AutoCAD" if stored else "measured from the outline"}
+                | {f"Stored{name}": value for name, value, _ in room["stored"]},
                 [space],
             )  # fmt: skip
             self.xdata(room, space)

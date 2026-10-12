@@ -16,7 +16,7 @@ class Drawing:
         self.metric = False  # MEASUREMENT: fallback when the drawing declares no units
         self.layers: dict[int, dict] = {}  # handle -> {name, color, lineweight, off, frozen, locked}
         self.blocks: dict[int, dict] = {}  # block header handle -> {name, base, units}
-        self.fields: dict[int, list] = {}  # object handle -> [(property, value as the drawing last computed it)]
+        self.fields: dict[int, list] = {}  # object handle -> [(property, value as displayed, value as a number)]
         self.linetypes: dict[int, dict] = {}  # handle -> {name, dashes}; a dash is a length, negative for a gap
         self.apps: dict[int, str] = {}  # registered application handle -> name, for xdata
         self.dimstyles: dict[int, dict] = {}  # handle -> {scale, arrow, text}
@@ -170,30 +170,42 @@ def _layer(o: dwg.Obj) -> dict:
 
 
 def _field(o: dwg.Obj) -> list:
-    """A field that reports a property of other objects, such as a polyline's area: [(object, property, value)].
+    """A field that reports a property of other objects, such as a polyline's area.
 
     AutoCAD stores the result it last computed next to the formula, so the value is the drawing's own.
+    Returns [(object handle, property, value as text, value as a number or None)].
+    Layout from AutoCAD's own reader (AcDbImpField and AcImpValue ::dwgInFields), not from the spec.
     """
     skip = _object_common(o)
     if not o.unicode or o.strings is None:
-        return []  # shortcut: before R2007 the cached value sits behind fields we do not step through
-    strings = []
-    try:
-        while len(strings) < 12:
-            strings.append(o.strings.tu())
-    except ValueError:
-        pass
-    if len(strings) < 2 or strings[0] != "AcObjProp":
+        return []  # shortcut: before R2007 the strings are inline and a format string is added; not stepped through
+    r, text = o.r, o.strings.tu
+    evaluator, code = text(), text()
+    if evaluator != "AcObjProp":
+        return []  # other evaluators (dates, file names, formulas) do not describe an object
+    named = re.search(r"\)\.(\w+)", code)
+    children, objects = r.bl(), r.bl()
+    for _ in range(5):
+        r.bl()  # evaluation option, filing option, field state, evaluation status, error code
+    text()  # error message
+    # the cached value: flags, data type, the value itself, a unit type, then its format and its text
+    flags, kind = r.bl(), r.bl()
+    number = None
+    if not flags & 1:
+        if kind == 2:
+            number = r.bd()
+        elif kind in (0, 1):
+            number = float(r.bl())
+        else:
+            return []  # text, dates, points and handles: not needed for a measured property
+    r.bl()
+    text(), text()
+    value = text()  # the field's result as displayed, e.g. "405 SF"
+    if not named:
         return []
-    named = re.search(r"\)\.(\w+)", strings[1])
-    value = next((t for t in strings[2:] if t and not t.startswith("%") and t != "ObjectPropertyId"), None)
-    if not named or value is None:
-        return []
-    children = o.r.bl()
-    objects = o.r.bl()
     for _ in range(1 + skip + children):
         o.handles.h(o.handle)
-    return [(o.handles.h(o.handle), named.group(1), value) for _ in range(min(objects, 16))]
+    return [(o.handles.h(o.handle), named.group(1), value, number) for _ in range(min(objects, 16))]
 
 
 def _linetype(o: dwg.Obj) -> dict:
@@ -918,8 +930,8 @@ def load(data: bytes) -> Drawing:
                 except ValueError:
                     pass  # sizes fall back to defaults
             elif o.type == "FIELD":
-                for target, name, value in _field(o):
-                    drawing.fields.setdefault(target, []).append((name, value))
+                for target, name, value, number in _field(o):
+                    drawing.fields.setdefault(target, []).append((name, value, number))
             elif o.type == "LTYPE":
                 try:
                     drawing.linetypes[o.handle] = _linetype(o)

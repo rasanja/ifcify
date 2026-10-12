@@ -139,9 +139,25 @@ def test_floor_plan_rooms_become_spaces():
     assert psets["DWG_Room"]["StoredArea"] == "405 SF"
     stored = [s for s in spaces.values() if "StoredArea" in ifcopenshell.util.element.get_psets(s)["DWG_Room"]]
     assert len(stored) == 66  # five rooms have no area field
-    for space in stored:  # and our own measurement agrees with it, to the whole square foot it is rounded to
+    for space in stored:  # the quantity is that stored number, which rounds to the text the drawing shows
         values = ifcopenshell.util.element.get_psets(space)
+        assert values["DWG_Room"]["AreaSource"] == "stored in the drawing by AutoCAD"
         assert abs(values["Qto_SpaceBaseQuantities"]["NetFloorArea"] / 0.3048**2 - float(values["DWG_Room"]["StoredArea"].split()[0].replace(",", ""))) <= 0.5
+    measured = [s for s in spaces.values() if s not in stored]
+    assert all(ifcopenshell.util.element.get_psets(s)["DWG_Room"]["AreaSource"] == "measured from the outline" for s in measured)
+
+
+def test_stored_field_values_match_our_own_measurement():
+    # AutoCAD's stored area for each room outline and the area we measure from the same outline: within 0.01 percent
+    from dwg2ifc import derive
+
+    drawing = entities.load((ASSETS / "building001-0_floor1.dwg").read_bytes())
+    by_handle = {e["handle"]: e for e in drawing.entities}
+    assert len(drawing.fields) == 66
+    for handle, [(name, text, number)] in drawing.fields.items():
+        outline = by_handle[handle]
+        assert name == "Area" and text.endswith(" SF")
+        assert abs(derive.exact_area(outline["points"], outline["bulges"]) - number) / number < 1e-4
 
 
 def test_plan_walls_become_ifc_walls():
