@@ -361,7 +361,9 @@ Path("drawing.ifc").write_text(ifc_text)
   - the rounded end of a pin (a torus that crosses its own axis). IFC has no torus of that kind, so it is
     written as an exact rational spline surface. IfcOpenShell ignores the weights of such a surface and
     draws it bulged: 1 to 2 percent too much area on those solids;
-  - a sliver a few thousandths of a unit wide, which comes out as a whole disc;
+  - a flat sliver half a thousandth of a unit wide between an arc and a spline. The IFC has it right;
+    IfcOpenShell's check for outlines that cross themselves misfires on it and returns the arc's whole
+    disc. With that check switched off (its setting `no-wire-intersection-check`) the solid matches AutoCAD;
   - a long narrow strip that the kernel builds but its mesher leaves empty at fine settings.
   Three shapes are written differently from how AutoCAD stores them, without moving any point, because
   IfcOpenShell cannot build the stored form: a patch of a sphere is a revolved arc (it does not read
