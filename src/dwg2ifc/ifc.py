@@ -656,8 +656,34 @@ class _Builder:
         dot = lambda a, b: sum(x * y for x, y in zip(a, b))  # noqa: E731
         styles = {handle: name for key, entries in self.root.items() if key.startswith("AEC_") and key.endswith("_STYLES")
                   for name, handle in d.dictionaries.get(entries, {}).items()}  # fmt: skip
+        named = {handle: name for key, entries in self.root.items() if key in ("AEC_MATERIAL_DEFS", "AEC_PROPERTY_SET_DEFS")
+                 for name, handle in d.dictionaries.get(entries, {}).items()}  # fmt: skip
         mine = [e for e in self.by_owner.get(owner, []) if "aec" in e]
         walls, made, typed = {}, [], defaultdict(list)
+
+        def values(name, description, stored, measure="IfcReal"):
+            """A property set of stored values in their own types, so that a BIM tool can edit them as numbers."""
+            kinds = {bool: "IfcBoolean", int: "IfcInteger", float: measure, str: "IfcText"}
+            listed = [f.createIfcPropertySingleValue(key, None, f.create_entity(kinds[type(value)], value), None)
+                      for key, value in stored.items() if type(value) in kinds]  # fmt: skip
+            return f.createIfcPropertySet(ifcopenshell.guid.new(), None, name, description or None, listed) if listed else None
+
+        def schedule(handle):
+            """The Architecture property sets attached to an object or style, named by their definitions."""
+            for stored in d.property_sets.values():
+                definition = d.property_set_defs.get(stored["definition"], {})
+                if stored["on"] == handle and stored["definition"] in named:
+                    names = definition.get("names", {})
+                    filled = {names.get(number, f"Property {number}"): value for number, value in stored["values"].items()}
+                    if made_set := values(named[stored["definition"]], definition.get("description"), filled):
+                        yield made_set
+
+        def scaled(size, width):
+            """A wall component's size, by the rule AutoCAD applies (AecInstanceBasedValue::calcActualValue)."""
+            base, operand, operator = size["base"], size["operand"], size["operator"]
+            if not size["follows"] or operator == 2 and not operand:
+                return base
+            return base + (operand + width, width - operand, width / (operand or 1), operand * width)[operator] if operator in range(4) else base
 
         def shape(*representations):
             return f.createIfcProductDefinitionShape(None, None, list(representations))
@@ -673,8 +699,10 @@ class _Builder:
             layer = d.layers.get(e["layer"], {}).get("name", "0")
             self.described[layer, e["type"], "by layer", "by layer"].append(product)
             self.property_set("DWG_Architecture", {"Style": style, "Source": "AutoCAD Architecture object; sizes as stored in the drawing"} | sizes, [product])
-            typed[product.is_a(), style].append(product)
+            typed[product.is_a(), a["style"]].append(product)
             made.append(product)
+            for stored in schedule(e["handle"]):
+                f.createIfcRelDefinesByProperties(ifcopenshell.guid.new(), None, None, None, [product], stored)
 
         for e in mine:
             a = e["aec"]
@@ -734,10 +762,34 @@ class _Builder:
             describe(e, filler, {"Width": a["width"], "Height": a["height"], "Rise": a["rise"]})
         if made:
             f.createIfcRelContainedInSpatialStructure(ifcopenshell.guid.new(), None, None, None, made, storey)
-        for (ifc_class, style), occurrences in typed.items():
-            if style:  # the style is the type: every wall of style "Brick-X" is an occurrence of it
-                kind = ifcopenshell.api.root.create_entity(f, ifc_class=ifc_class + "Type", name=style)
-                f.createIfcRelDefinesByType(ifcopenshell.guid.new(), None, None, None, occurrences, kind)
+        materials = {}
+        for (ifc_class, handle), occurrences in typed.items():
+            if handle not in styles:
+                continue
+            # the style is the type: every wall of style "Brick-X" is an occurrence of it
+            kind = ifcopenshell.api.root.create_entity(f, ifc_class=ifc_class + "Type", name=styles[handle])
+            f.createIfcRelDefinesByType(ifcopenshell.guid.new(), None, None, None, occurrences, kind)
+            style = d.aec_styles.get(handle, {})
+            kind.Description = style.get("description") or None
+            sizes = values("DWG_ArchitectureStyle", "Sizes stored in the AutoCAD Architecture style", style.get("sizes", {}), "IfcLengthMeasure")
+            kind.HasPropertySets = [stored for stored in (sizes, *schedule(handle)) if stored] or None
+            by_width = defaultdict(list)
+            for product in occurrences if style.get("components") else ():
+                _, a, side = walls[int(product.Tag, 16)]
+                by_width[a["width"], round(side, 6)].append(product)  # rounded: stored boxes differ in the last digits
+            for (width, side), group in by_width.items():
+                # the style's layers at this wall width, in the order they lie across the wall
+                parts = sorted(((scaled(c["offset"], width), scaled(c["width"], width), c) for c in style["components"]), key=lambda part: part[0])
+                if any(thick <= 0 for _, thick, _ in parts):
+                    continue
+                layers = f.createIfcMaterialLayerSet([
+                    f.createIfcMaterialLayer(materials.setdefault(c["material"], f.createIfcMaterial(named.get(c["material"], "Unnamed"), None, None)), float(thick), None, c["name"])
+                    for _, thick, c in parts], styles[handle], None)  # fmt: skip
+                # the layers start at the side of the wall's own stored box; the style only gives their order and widths
+                usage = f.createIfcMaterialLayerSetUsage(layers, "AXIS2", "POSITIVE", float(side), None)
+                f.createIfcRelAssociatesMaterial(ifcopenshell.guid.new(), None, None, None, group, usage)
+                if len(by_width) == 1:
+                    f.createIfcRelAssociatesMaterial(ifcopenshell.guid.new(), None, None, None, [kind], layers)
 
     def columns(self, storey, owner) -> None:
         """Columns: closed shapes on column layers, extruded when a height is known."""

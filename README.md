@@ -61,6 +61,21 @@ into the wall it belongs to and filled by its door or window; each style (`Brick
 as an IFC type. Nothing about them is assumed. Where a drawing has such walls, walls are not also
 guessed from its linework. Their 2D plan symbols are kept alongside as drafting.
 
+Each type carries what its style stores:
+
+- `DWG_ArchitectureStyle`: the style's own sizes as lengths. For a door: frame width and depth, stop
+  width and depth, door and glass thickness. For a window: frame, sash and glass. For a wall: default
+  width, base height, roof-line and floor-line offsets, cleanup radius.
+- The drawing's schedule property sets (AutoCAD's "property set definitions", such as `DoorStyles` or
+  `ManufacturerStyles`), under their own names, with each value as the number, text or yes/no it is
+  stored as. A set attached to a single wall, door or window goes on that element. Properties AutoCAD
+  fills in by itself when it draws a schedule (a wall's length, a door's size) are not stored in the
+  set and so are not in it; the element's own stored sizes are in `DWG_Architecture`.
+- For a wall, its layers (`IfcMaterialLayerSet`): each of the style's components with its name and
+  material. A component's width is stored as a rule ("the wall's width", "half the wall's width plus
+  10"); the rule is applied to each wall's stored width the way AutoCAD applies it, and the layers
+  start at the side of the wall's stored box.
+
 Derived elements are an interpretation and are marked as such. Recognition depends on layer and block
 naming, so a drawing with meaningless names produces drafting and generic objects only. Import into Revit
 has not been tested.
@@ -216,7 +231,10 @@ AutoCAD Architecture objects other than straight walls, doors, windows and openi
 slabs, roofs, stairs, spaces, curtain walls) are drawn from their picture only; their sizes are not
 read. The same holds for a wall with body modifiers or a custom roof or floor line, and for any object
 carrying a classification: those are reported as `<TYPE> sizes (layout not read; drawn from its
-picture)`. What a wall style is built from (its layers and materials) is not read either. All of this
+picture)`. Of a style, the display settings are not read (how it is drawn in plan, hatching), nor a
+component's top and bottom elevations, nor the materials of a door's or window's parts; a property set
+whose definition has formula, location or classification properties is reported as unreadable, not
+half-read. All of this
 was checked against one drawing, saved by AutoCAD Architecture 2007; other versions of these objects
 take the same route only if their layout matches, and fall back to the picture if not.
 

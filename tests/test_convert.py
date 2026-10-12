@@ -253,6 +253,20 @@ def test_architecture_objects_become_elements_with_their_stored_sizes():
     assert len(model.by_type("IfcRelVoidsElement")) == 32 and len(model.by_type("IfcRelFillsElement")) == 22
     types = {(t.is_a(), t.Name): len(t.Types[0].RelatedObjects) for t in model.by_type("IfcTypeProduct") if t.Types}
     assert types == {("IfcWallType", "Brick-X"): 48, ("IfcDoorType", "Standard"): 9, ("IfcDoorType", "Hinged - Double"): 1, ("IfcWindowType", "Standard"): 12}
+    # a style's own sizes and its schedule data are on the type, as numbers and text a BIM tool can edit
+    kinds = {t.Name: ifcopenshell.util.element.get_psets(t) for t in model.by_type("IfcTypeProduct") if t.Types}
+    assert kinds["Hinged - Double"]["DWG_ArchitectureStyle"] | {"id": 0} == {
+        "FrameWidth": 50.0, "FrameDepth": 100.0, "StopWidth": 15.0, "StopDepth": 50.0, "DoorThickness": 40.0, "GlassThickness": 4.0, "id": 0}  # fmt: skip
+    assert kinds["Brick-X"]["DWG_ArchitectureStyle"]["DefaultBaseHeight"] == pytest.approx(2438.4)
+    assert set(kinds["Hinged - Double"]) == {"DWG_ArchitectureStyle", "DoorStyles", "FrameStyles", "ManufacturerStyles"}
+    assert kinds["Hinged - Double"]["ManufacturerStyles"] | {"id": 0} == {"Manufacturer": "--", "Model": "--", "Color": "--", "Cost": 0.0, "id": 0}
+    assert drawing.property_set_defs and all(len(s["values"]) for s in drawing.property_sets.values())
+    # a wall's layers come from its style: the component's name and material, as wide as this wall, where its box lies
+    for wall in model.by_type("IfcWall"):
+        usage = ifcopenshell.util.element.get_material(wall)
+        box = wall.Representation.Representations[0].Items[0].SweptArea
+        assert [(layer.Name, layer.Material.Name, layer.LayerThickness) for layer in usage.ForLayerSet.MaterialLayers] == [("Brick Veneer", "Standard", box.YDim)]
+        assert usage.OffsetFromReferenceLine == pytest.approx(box.Position.Location.Coordinates[1] - box.YDim / 2, abs=1e-5)
     wall = model.by_type("IfcWall")[0]
     stored = ifcopenshell.util.element.get_psets(wall)["DWG_Architecture"]
     assert (stored["Style"], stored["Height"], stored["Width"]) == ("Brick-X", "3200.0", "230.0")

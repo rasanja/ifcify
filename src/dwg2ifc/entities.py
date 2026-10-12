@@ -32,6 +32,9 @@ class Drawing:
         self.anchors: dict[int, int] = {}  # anchor handle -> the wall an Architecture door, window or opening sits in
         self.underlays: dict[int, dict] = {}  # underlay definition handle -> {file, page}
         self.images: dict[int, str] = {}  # image definition handle -> path of the picture file
+        self.aec_styles: dict[int, dict] = {}  # Architecture wall, door or window style handle -> the sizes it stores
+        self.property_sets: dict[int, dict] = {}  # Architecture property set handle -> {on (object it describes), definition, values by number}
+        self.property_set_defs: dict[int, dict] = {}  # its definition's handle -> {description, names by number}
         self.histories: dict[int, int] = {}  # solid history handle -> handle of its graph of modelling steps
         self.steps: dict[int, dict] = {}  # modelling step handle -> {owner (the graph), kind, sizes}
         self.entities: list[dict] = []  # each has type, handle, owner (block header handle), layer
@@ -1290,6 +1293,206 @@ def _aec_setup(o: dwg.Obj) -> int:
     return unit
 
 
+def _aec_item(o, r, version: int):
+    """Whether an inner Architecture object follows, and its class: a number from version 30 on, a name before."""
+    if not r.b():
+        return None
+    return r.bs() if version >= 0x1E and r.b() else o.text()
+
+
+def _aec_list(o, r, item, classes) -> list:
+    """A list of inner objects, each announced with its class. Only the classes named are read."""
+    _aec_version(r), o.text()
+    version = _aec_version(r)
+    made = []
+    for _ in range(r.bl()):
+        kind = _aec_item(o, r, version)
+        if kind is not None and kind not in classes:
+            raise ValueError(f"Architecture list item of class {kind}")  # a subclass stores more than we would read
+        if kind is not None:
+            made.append(item(o, r))
+    return made
+
+
+def _aec_record(o: dwg.Obj) -> str:
+    """Start of an Architecture style, definition or property set; gives its description.
+
+    Layout from AecDbObject, Aec::readObject, AecImpObj and AecImpDictRecord.
+    """
+    for _ in range(1 + _object_common(o)):
+        o.handles.h(o.handle)
+    r = o.r
+    if _aec_item(o, r, _aec_version(r)) is None:
+        raise ValueError("Architecture object without data")
+    _aec_version(r)
+    description = o.text()
+    version = _aec_version(r)
+    if version >= 0x1E:
+        o.text()
+    # classifications: lists of handles up to version 49, then a flag and a list
+    if (version == 0x28 and r.bl()) or (0x29 <= version <= 0x31 and (r.bl() or r.bl())) or (version >= 0x32 and r.b()):
+        raise ValueError("Architecture object with classifications")  # shortcut: not stepped through; none seen yet
+    if version > 0x32:
+        r.rc()
+    return description
+
+
+def _aec_end(r) -> None:
+    """After the inner object: no second one, then the versions of the two outer classes."""
+    if r.b():
+        raise ValueError("Architecture object with a second inner object")
+    _aec_version(r), _aec_version(r)
+
+
+def _aec_value(o, r):
+    """A property's value with its type in front (AecScheduleDataUtils::dwgReadVariant; the numbers are COM's)."""
+    kind = r.bs()
+    if kind == 0:
+        return None
+    if kind in (2, 3):
+        return r.bl()
+    if kind == 5:
+        return r.bd()
+    if kind == 8:
+        return o.text()
+    if kind == 0x0B:
+        return bool(r.b())
+    if kind == 0x14:
+        return r.bll()
+    if kind == 0x200C:
+        return [_aec_value(o, r) for _ in range(r.bl())]
+    raise ValueError(f"property value of type {kind}")
+
+
+def _aec_unit(o, r) -> None:
+    _aec_version(r), o.text(), _aec_version(r)
+    for _ in range(r.bl()):
+        r.bl(), r.bl()
+    r.bs()
+
+
+def _aec_property(o, r) -> tuple:
+    """One value of a property set (AecProperty): the number that ties it to its definition, and the value."""
+    _aec_version(r), o.text()
+    version = _aec_version(r)
+    number, kind, value = r.bl(), r.bs(), _aec_value(o, r)
+    r.b()
+    if version >= 0x32 and kind == 6:
+        o.handles.h(o.handle)
+    if version >= 0x33:
+        _aec_unit(o, r)
+    return number, value
+
+
+def _property_set(o: dwg.Obj) -> dict:
+    """AecDbPropertySet: schedule data attached to an Architecture object or style (AecImpPropertySet)."""
+    _aec_record(o)
+    r = o.r
+    _aec_version(r)
+    made = {"on": o.handles.h(o.handle), "definition": o.handles.h(o.handle)}
+    made["values"] = dict(_aec_list(o, r, _aec_property, (1006, "AecProperty")))
+    _aec_end(r)
+    return made
+
+
+def _aec_property_def(o, r) -> tuple:
+    """One property of a definition (AecPropertyDef): its number and name."""
+    _aec_version(r), o.text()
+    version = _aec_version(r)
+    number, name, kind = r.bl(), o.text(), r.bs()
+    if r.b():  # filled in by AutoCAD from the object itself: which classes and which of their figures
+        for _ in range(r.bl()):
+            o.text(), o.text(), r.bl(), o.text()
+    o.handles.h(o.handle)  # format
+    _aec_value(o, r)  # default
+    r.b()
+    if version >= 0x32:
+        _aec_unit(o, r)
+        if kind == 6:
+            o.handles.h(o.handle), o.handles.h(o.handle)
+        o.text(), r.rc(), r.bl()
+    return number, name
+
+
+def _property_set_def(o: dwg.Obj) -> dict:
+    """AEC_PROPERTY_SET_DEF: the names of a property set's values (AecImpPropertySetDef)."""
+    made = {"description": _aec_record(o)}
+    r = o.r
+    version = _aec_version(r)
+    r.bl()
+    made["names"] = dict(_aec_list(o, r, _aec_property_def, (1007, "AecPropertyDef")))
+    for _ in range(r.bs()):
+        o.text()  # the classes it applies to
+    r.bs()
+    if version >= 0x1E:
+        r.b()
+    if (version == 0x28 and r.bl()) or (0x29 <= version <= 0x31 and (r.bl() or r.bl())) or (version >= 0x32 and r.b()):
+        raise ValueError("property set definition with classifications")  # shortcut: as in _aec_record
+    if version >= 0x32:
+        r.rc()
+    _aec_end(r)
+    return made
+
+
+def _aec_scaled(o, r) -> dict:
+    """A size that may follow the wall's own width (AecInstanceBasedValue)."""
+    _aec_version(r), o.text(), _aec_version(r)
+    return {"base": r.bd(), "operand": r.bd(), "operator": r.bs(), "follows": r.b()}
+
+
+def _aec_component(o, r) -> dict:
+    """One layer of a wall style (AecWallStyleComp and its AecWallStyleCompPos)."""
+    _aec_version(r), o.text()
+    version = _aec_version(r)
+    c = {"name": o.text(), "priority": r.bs()}
+    if _aec_item(o, r, version) is not None:
+        _aec_version(r), o.text(), _aec_version(r)
+        for _ in range(2):  # bottom and top elevation: an offset and what it counts from
+            _aec_version(r), o.text(), _aec_version(r), r.bd(), r.bs()
+        c["width"], c["offset"] = _aec_scaled(o, r), _aec_scaled(o, r)
+    if version < 0x28:
+        raise ValueError("wall component in an older layout")
+    r.bs()
+    c["material"] = o.handles.h(o.handle)
+    if version >= 0x32:
+        r.bs(), r.rc()
+    return c
+
+
+def _aec_style(o: dwg.Obj) -> dict:
+    """AEC_WALL_STYLE, AEC_DOOR_STYLE, AEC_WINDOW_STYLE: the sizes and materials a style gives its objects.
+
+    Layout from AecImpWallStyle (dwgInExeter), AecImpDoorStyle and AecImpWindowStyle; the names are those of
+    AutoCAD's own accessors. The display settings that follow are not read.
+    """
+    s = {"description": _aec_record(o)}
+    r = o.r
+    version = _aec_version(r)
+    handle = lambda: o.handles.h(o.handle)  # noqa: E731
+    if o.type == "AEC_WALL_STYLE":
+        if version < 0x1F:
+            raise ValueError("wall style in an older layout")
+        for _ in range(5):
+            handle()  # endcap styles
+        s["material"] = handle()
+        s["components"] = _aec_list(o, r, _aec_component, (652, "AecWallStyleComp"))
+        r.bs()
+        s["sizes"] = {"DefaultWidth": r.bd(), "DefaultBaseHeight": r.bd(), "DefaultRooflineOffset": r.bd(), "DefaultFloorlineOffset": r.bd(), "DefaultCleanupRadius": r.bd()}
+    else:
+        if version < 0x28:
+            raise ValueError("opening style in an older layout")
+        r.b()
+        door = o.type == "AEC_DOOR_STYLE"
+        names = ("FrameWidth", "FrameDepth", "StopWidth", "StopDepth", "DoorThickness") if door else ("FrameWidth", "FrameDepth", "SashWidth", "SashDepth", "GlassThickness")
+        s["sizes"] = {name: r.bd() for name in names}
+        r.bs(), r.bs(), handle()  # type, shape, custom shape
+        s["materials"] = [handle() for _ in range(5 if door else 4)]
+        if door:
+            s["sizes"]["GlassThickness"] = r.bd()
+    r.p = o.end
+    return s
+
+
 _AEC = ("AEC_WALL", "AEC_DOOR", "AEC_WINDOW", "AEC_OPENING")
 
 
@@ -1400,6 +1603,11 @@ _OBJECTS = {
     "GEODATA": ("geodata", _geodata),
     "AEC_ANCHOR_OPENINGBASE_TO_WALL": ("anchors", _anchor),
     "AEC_VARS_DWG_SETUP": ("aec_units", _aec_setup),
+    "AEC_WALL_STYLE": ("aec_styles", _aec_style),
+    "AEC_DOOR_STYLE": ("aec_styles", _aec_style),
+    "AEC_WINDOW_STYLE": ("aec_styles", _aec_style),
+    "AecDbPropertySet": ("property_sets", _property_set),
+    "AEC_PROPERTY_SET_DEF": ("property_set_defs", _property_set_def),
     "ACSH_HISTORY_CLASS": ("histories", _history),
 }
 # entities with nothing to draw: block brackets, viewports, and attribute templates (the ATTRIB holds the value)
