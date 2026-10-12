@@ -764,6 +764,9 @@ class _Builder:
         layer = self.d.layers.get(e["layer"], {}).get("name", "")
         if e["type"] == "LIGHT":
             return "IfcLightFixture"
+        if e.get("thickness") and "bodies" not in e and any(_kind(i) in _BODY_KINDS for i in items):
+            # a line drawn with a thickness is one face of something, not the thing: two of them make one wall
+            return "IfcBuildingElementProxy"
         if any(_kind(i) in _BODY_KINDS or self.is_body(i) for i in items):
             return classify(self.d.blocks.get(e.get("block"), {}).get("name", ""), layer) or "IfcBuildingElementProxy"
         if e["type"] in ("INSERT", "MINSERT"):
@@ -833,7 +836,9 @@ class _Builder:
         name = "parts" if "parts" in e else "dimension" if kind.startswith("DIMENSION") else _METHODS.get(kind, kind.lower())
         outer, self.shift = self.shift, (self.origin_shift if not parents else (0.0, 0.0, 0.0))
         try:
-            found = getattr(self, "_" + name)(e, parents)
+            found = self.standing(e) if e.get("thickness") and "parts" not in e else None
+            if found is None:
+                found = getattr(self, "_" + name)(e, parents)
         except (ValueError, ZeroDivisionError, OverflowError):  # geometry too broken to express
             found = None
         finally:
@@ -926,8 +931,9 @@ class _Builder:
         points = _distinct(points)
         return self.f.createIfcPolyline([self.point(p) for p in points]) if len(points) > 1 else None
 
-    def polycurve(self, points, bulges, closed, elevation, extrusion):
-        """A 2D polyline with bulge arcs, as LWPOLYLINE, POLYLINE_2D and hatch loops store it."""
+    def polycurve(self, points, bulges, closed, elevation, extrusion, flat=False):
+        """A 2D polyline with bulge arcs, as LWPOLYLINE, POLYLINE_2D and hatch loops store it.
+        `flat` leaves it in its own plane, as a 2D curve, for use as a profile."""
         if len(points) < 2:
             return None
         axes = _ocs(extrusion)
@@ -948,8 +954,71 @@ class _Builder:
             coords.append((x2, y2))
         if not segments:
             return None
+        if flat:
+            listed = self.f.createIfcCartesianPointList2D([tuple(map(float, p)) for p in coords])
+            return self.f.createIfcIndexedPolyCurve(listed, segments, False)
         listed = self.f.createIfcCartesianPointList3D([self.xyz(_to_wcs(axes, (x, y, elevation))) for x, y in coords])
         return self.f.createIfcIndexedPolyCurve(listed, segments, False)
+
+    def standing(self, e):
+        """An entity drawn with a thickness: the surface that stands on its curve, as high as the thickness.
+
+        This is how a flat drawing stores a height, so it is written as the 3D it describes: a flat
+        panel on a line, part of a cylinder on an arc, a solid block on a filled shape. Written the way
+        solids are (faces on exact surfaces, bounded by edges), which geometry kernels handle; a bare
+        swept surface makes IfcOpenShell hang. None for entity types that have no such form here.
+        """
+        f, tall, kind = self.f, e["thickness"], e["type"]
+        normal = _unit(e.get("extrusion", _Z))
+        axes = _ocs(normal)
+        world = lambda x, y, z: _to_wcs(axes, (x, y, z))  # noqa: E731
+        lift = lambda p: tuple(c + tall * n for c, n in zip(p, normal))  # noqa: E731
+        pieces = []  # (start, end, None) for a straight run; (start, end, centre, radius) for an arc, anticlockwise
+        if kind == "LINE":
+            pieces.append((e["start"], e["end"], None))
+        elif kind in ("CIRCLE", "ARC") and e["radius"] > 0:
+            (cx, cy, cz), radius = e["center"], e["radius"]
+            from_, to = (e["start_angle"], e["end_angle"]) if kind == "ARC" else (0.0, 0.0)
+            on = lambda angle: world(cx + radius * math.cos(angle), cy + radius * math.sin(angle), cz)  # noqa: E731
+            pieces.append((on(from_), on(to), world(cx, cy, cz), radius))
+        elif kind in ("SOLID", "TRACE"):  # a filled shape with a thickness is a solid block
+            a, b, c, d = e["corners"]
+            outline = self.polycurve([a, b, d, c], (), True, 0.0, _Z, flat=True)
+            base = self.placement(axes, world(0.0, 0.0, e["elevation"] + min(tall, 0.0)))
+            return outline and f.createIfcExtrudedAreaSolid(f.createIfcArbitraryClosedProfileDef("AREA", None, outline), base, self.direction(_Z), abs(tall))
+        elif kind in ("LWPOLYLINE", "POLYLINE_2D"):
+            points, height = [p[:2] for p in e["points"]], e["elevation"]
+            bulges = list(e["bulges"]) + [0.0] * len(points)
+            for i in range(len(points) if e["closed"] else len(points) - 1):
+                (x1, y1), (x2, y2), bulge = points[i], points[(i + 1) % len(points)], bulges[i]
+                if _same((x1, y1), (x2, y2)):
+                    continue
+                if not bulge:
+                    pieces.append((world(x1, y1, height), world(x2, y2, height), None))
+                    continue
+                # the bulge is the tangent of a quarter of the arc's angle; its centre lies off the chord's middle
+                back = (1 - bulge * bulge) / (4 * bulge)
+                cx, cy = (x1 + x2) / 2 - back * (y2 - y1), (y1 + y2) / 2 + back * (x2 - x1)
+                ends = ((x1, y1), (x2, y2)) if bulge > 0 else ((x2, y2), (x1, y1))  # edges run anticlockwise
+                pieces.append((*(world(x, y, height) for x, y in ends), world(cx, cy, height), math.hypot(x1 - cx, y1 - cy)))
+        up = tuple(n * math.copysign(1.0, tall) for n in normal)
+        made, key = [], 0
+        for start, end, *arc in pieces:
+            if arc[0] is None:
+                along = _unit(tuple(q - p for p, q in zip(start, end)))
+                surface, bottom, top = ("plane", start, _unit(_cross(along, normal)), along), ("line", start, along), ("line", lift(start), along)
+            else:
+                centre, major = arc[0], tuple(arc[1] * c for c in axes[0])
+                surface = ("cone", centre, normal, major, 1.0, 0.0, 1.0)  # a cylinder: a cone that does not narrow
+                bottom, top = ("ellipse", centre, normal, major, 1.0), ("ellipse", lift(centre), normal, major, 1.0)
+            if _same(start, end):  # a whole circle: its two rims bound the face
+                loops = [[(key, start, start, bottom, True, True)], [(key + 1, lift(start), lift(start), top, True, False)]]
+            else:
+                loops = [[(key, start, end, bottom, True, True), (key + 1, end, lift(end), ("line", end, up), True, True),
+                          (key + 2, lift(start), lift(end), top, True, False), (key + 3, start, lift(start), ("line", start, up), True, False)]]  # fmt: skip
+            made.append({"surface": surface, "same_sense": True, "double": True, "loops": loops})
+            key += 4
+        return self.acis_body({"faces": made}, kind) if made else None
 
     def faces(self, points, faces):
         """A face set from points and 1-based index loops; loops that collapse to fewer than 3 corners are dropped."""

@@ -17,6 +17,7 @@ DWG releases R14, R2000, R2004, R2007, R2010, R2013 and R2018.
 | Blocks and their inserts, dimensions, tables | `IfcRepresentationMap` placed by `IfcMappedItem` |
 | Tolerances, multilines | text and curves |
 | Rays, construction lines | `IfcLine`, which is unbounded like they are |
+| Lines, arcs, circles, polylines drawn with a thickness | faces standing on the curve (`IfcShellBasedSurfaceModel`), in an `IfcBuildingElementProxy` |
 | 3D solids, regions, surfaces | `IfcAdvancedBrep` or a surface model, in an `IfcBuildingElementProxy` |
 | Meshes, polyface meshes, 3D faces, subdivision meshes | `IfcPolygonalFaceSet` |
 | Helices | `IfcBSplineCurveWithKnots`, with the radius, turns and turn height as properties |
@@ -124,8 +125,11 @@ used rather than recomputed:
   measured areas agree to 0.01 percent.
 - The measured size of multiline text.
 - The width of a wide polyline, when it is the same along its length.
-- The thickness (extrusion height) of a 2D entity, kept as a property, and used as the height of a wall,
-  room or column read from lines that have one.
+- The thickness (extrusion height) of a 2D entity. A line, arc, circle or polyline drawn with one is
+  written as the surface it describes: a flat panel on a line, part of a cylinder on an arc, with exact
+  surfaces and edges; a filled shape with a thickness is a solid block. It is also the height of a wall,
+  room or column read from lines that have one. A circle is written as its side only, without the caps
+  AutoCAD shades on it.
 - A dimension's measurement.
 - The sizes a solid was made with. AutoCAD keeps the length, width and height of a box or wedge, the
   radius of a sphere, the height and radii of a cylinder or cone, and the two radii of a torus, in the

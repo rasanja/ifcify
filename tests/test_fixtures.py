@@ -187,7 +187,8 @@ def test_converts_to_ifc(path):
     # CONE 350,5,0 4 8: a triangle of radius 4 and height 8
     assert [p.Coordinates for p in cone.SweptArea.OuterCurve.Points] == [(0.0, 0.0), (4.0, 0.0), (0.0, 8.0), (0.0, 0.0)]
     assert len(model.by_type("IfcSurfaceOfRevolution")) == 2  # the frustums' sides
-    assert len(model.by_type("IfcShellBasedSurfaceModel")) == 2  # the region and the plane surface
+    sheets = [p.ObjectType for p in model.by_type("IfcProduct") if p.Representation and p.Representation.Representations[0].RepresentationType == "SurfaceModel"]
+    assert sorted(k for k in sheets if k in ("REGION", "PLANESURFACE")) == ["PLANESURFACE", "REGION"]
     box = max(model.by_type("IfcAdvancedBrep"), key=lambda b: len(b.Outer.CfsFaces))
     corners = {v.VertexGeometry.Coordinates for face in box.Outer.CfsFaces for bound in face.Bounds
                for edge in bound.Bound.EdgeList for v in (edge.EdgeElement.EdgeStart, edge.EdgeElement.EdgeEnd)}  # fmt: skip
@@ -442,3 +443,25 @@ def test_text_is_hung_where_the_drawing_says_and_hatches_keep_their_pattern(path
     (drawn,) = model.by_type("IfcFillAreaStyleHatching")
     assert drawn.HatchLineAngle == pytest.approx(math.pi / 4) and drawn.StartOfNextHatchLine.Magnitude == pytest.approx(0.125)
     assert model.by_type("IfcFillAreaStyle") and any(s.Name == "ANSI31" for s in model.by_type("IfcFillAreaStyle"))
+
+
+@pytest.mark.parametrize("path", RELEASES, ids=lambda p: p.stem)
+def test_thick_entities_stand_up(path):
+    """THICKNESS 4, then a line, a circle, an arc, a polyline with an arc in it and a filled shape, at y = 340."""
+    drawing = entities.load(path.read_bytes())
+    thick = {e["type"]: e for e in drawing.entities if e.get("thickness")}
+    assert set(thick) == {"LINE", "CIRCLE", "ARC", "LWPOLYLINE", "SOLID"} and all(e["thickness"] == 4.0 for e in thick.values())
+    model = ifcopenshell.file.from_string(convert(path.read_bytes())[0])
+    shown = {p.ObjectType: p.Representation.Representations[0] for p in model.by_type("IfcBuildingElementProxy") if p.Tag in {f"{e['handle']:X}" for e in thick.values()}}
+    assert set(shown) == set(thick) and all(r.RepresentationIdentifier == "Body" for r in shown.values())
+    block = shown["SOLID"].Items[0]
+    assert block.is_a("IfcExtrudedAreaSolid") and block.Depth == 4.0
+    # the line is one flat panel; the circle one face of a cylinder of its radius; the polyline three faces, one curved
+    faces = {kind: [face.FaceSurface for face in r.Items[0].SbsmBoundary[0].CfsFaces] for kind, r in shown.items() if kind != "SOLID"}
+    assert [s.is_a() for s in faces["LINE"]] == ["IfcPlane"]
+    assert [(s.is_a(), s.Radius) for s in faces["CIRCLE"]] == [("IfcCylindricalSurface", 3.0)]
+    assert [(s.is_a(), s.Radius) for s in faces["ARC"]] == [("IfcCylindricalSurface", 3.0)]
+    assert sorted(s.is_a() for s in faces["LWPOLYLINE"]) == ["IfcCylindricalSurface", "IfcPlane", "IfcPlane"]
+    # every corner is on the ground or 4 above it
+    heights = {round(v.VertexGeometry.Coordinates[2], 9) for v in model.by_type("IfcVertexPoint") if 339 < v.VertexGeometry.Coordinates[1] < 347}
+    assert heights == {0.0, 4.0}
