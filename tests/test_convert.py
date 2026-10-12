@@ -354,3 +354,9 @@ def test_an_adjusted_dynamic_block_keeps_the_name_of_the_block_it_was_made_from(
     assert Counter(p.is_a() for p in made) == {"IfcWindow": 8, "IfcDoor": 4}
     assert {ifcopenshell.util.element.get_psets(p)["DWG_Block"]["BlockName"] for p in made} == {"Window - Imperial", "Door - Imperial"}
     assert {ifcopenshell.util.element.get_type(p).Name for p in made} == {"Window - Imperial", "Door - Imperial"}
+    # what each insert's parameters are set to, under the labels the block's author gave them
+    door = next(e for e in named if e["handle"] == 0x1F3D)
+    assert door["parameters"] == {"Door Size": pytest.approx(30), "Wall Thickness": pytest.approx(6), "Hinge": "Right", "Swing": "Inside", "Opening Angle": "Open 30º"}
+    assert Counter(round(e["parameters"]["W"]) for e in named if "W" in e["parameters"]) == {60: 5, 42: 3}
+    stored = ifcopenshell.util.element.get_psets(next(p for p in made if p.Name == "INSERT:1F3D"))["DWG_BlockParameters"]
+    assert (stored["Door Size"], stored["Hinge"], stored["Opening Angle"]) == (pytest.approx(30), "Right", "Open 30º")

@@ -49,7 +49,11 @@ A DWG holds lines on layers, not walls and rooms. The converter adds building in
   blocks whose names are not recognised stay plain drafting, without a type.
   An insert of a dynamic block that was stretched or flipped is drawn by AutoCAD from a private copy
   (`*U12`); the drawing stores which block it was made from, and that name is the one used for the
-  element's name, class and type. The values its parameters were set to are not read yet.
+  element's name, class and type. What its parameters are set to is in `DWG_BlockParameters`, under
+  the labels the block's author gave them (`Door Size` 30, `Hinge` Right, `Opening Angle` Open 30º).
+  Read today: linear and constraint distances, flip states and visibility states. A distance is
+  stored as its two end points, so the figure is the distance between them. Rotation, polar, XY,
+  point and lookup parameters are not read yet and are simply absent from the set.
 - **Elements derived from plans.** Room outlines become `IfcSpace` with a floor area, and a name when there
   is text inside the outline. Pairs of
   parallel lines on wall layers become `IfcWall` with a thickness and a wall type; a gap with a door or window

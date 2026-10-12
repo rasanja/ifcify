@@ -36,6 +36,7 @@ class Drawing:
         self.property_sets: dict[int, dict] = {}  # Architecture property set handle -> {on (object it describes), definition, values by number}
         self.property_set_defs: dict[int, dict] = {}  # its definition's handle -> {description, names by number}
         self.dynamic_blocks: dict[int, int] = {}  # block representation handle -> the dynamic block an insert was made from
+        self.block_parameters: dict[int, dict] = {}  # dynamic block parameter handle -> {owner (the block's graph), kind, node, label}
         self.histories: dict[int, int] = {}  # solid history handle -> handle of its graph of modelling steps
         self.steps: dict[int, dict] = {}  # modelling step handle -> {owner (the graph), kind, sizes}
         self.entities: list[dict] = []  # each has type, handle, owner (block header handle), layer
@@ -407,6 +408,57 @@ _PRIMITIVES = {
 }
 
 
+def _expression(o: dwg.Obj) -> int:
+    """AcDbEvalExpr, the start of every node of an evaluation graph: gives the node's number in its graph."""
+    r = o.r
+    node = r.bl()
+    if node == 0xFFFFFFFF:  # a newer layout carries a version and a last value in front
+        r.bl(), r.bl()
+        kind = _VALUE_TYPE.get(struct.unpack("<h", r.bs().to_bytes(2, "little"))[0])
+        {"real": r.bd, "int32": r.bl, "int16": r.bs, "int8": r.bs, "point": r.bd3, "text": o.text}.get(kind, int)()
+        node = r.bl()
+    return node
+
+
+# dynamic block parameters whose label and value are read, and how an insert stores the value
+_PARAMETERS = {
+    "BLOCKLINEARPARAMETER": "distance", "BLOCKLINEARCONSTRAINTPARAMETER": "distance", "BLOCKALIGNEDCONSTRAINTPARAMETER": "distance",
+    "BLOCKHORIZONTALCONSTRAINTPARAMETER": "distance", "BLOCKVERTICALCONSTRAINTPARAMETER": "distance",
+    "BLOCKFLIPPARAMETER": "flip", "BLOCKVISIBILITYPARAMETER": "state",
+}  # fmt: skip
+
+
+def _block_parameter(o: dwg.Obj) -> dict:
+    """A parameter of a dynamic block: the label the user sees ("Door Size", "Hinge") and its number in the block's graph.
+
+    Layout from AcDbImpEvalExpr, AcDbImpBlockElement, AcDbImpBlockParameter, then AcDbImpBlock2PtParameter or
+    AcDbImpBlock1PtParameter and the class itself, read as far as the label; grips and value lists follow.
+    """
+    if not since(o.release, "R2007"):
+        raise ValueError("dynamic block parameter in an older layout")
+    skip = _object_common(o)
+    r = o.r
+    made = {"owner": o.handles.h(o.handle), "kind": _PARAMETERS[o.type], "node": _expression(o)}
+    o.text()  # the parameter's internal name
+    version, maintenance = r.bl(), r.bl()
+    r.bl(), r.b()
+    newer = version != 0xFE and maintenance != 0x7FFFFFFE and (version > 0x19 or version == 0x19 and maintenance > 0x3F)
+    if newer:
+        r.b()
+    # what the parameter drives, as (node, property name) lists: two for one point, four for two
+    for _ in range(2 if made["kind"] == "state" else 4):
+        if not _:
+            r.bd3() if made["kind"] == "state" else (r.bd3(), r.bd3())
+        for _ in range(r.bl()):
+            r.bl(), o.text()
+    made["label"] = o.text()
+    if made["kind"] == "flip":
+        o.text()  # description
+        made["states"] = (o.text(), o.text())  # not flipped, flipped
+    r.p = o.end
+    return made
+
+
 def _step(o: dwg.Obj) -> dict:
     """One step of a solid's history. A primitive keeps the sizes the user gave it, so they need not be measured."""
     skip = _object_common(o)
@@ -419,11 +471,7 @@ def _step(o: dwg.Obj) -> dict:
     if o.type not in _PRIMITIVES:
         r.p = o.end  # fillets, booleans, sweeps: counted as steps, their settings are not read
         return step
-    if r.bl() == 0xFFFFFFFF:  # AcDbEvalExpr: a newer layout carries a version and a last value
-        r.bl(), r.bl()
-        kind = _VALUE_TYPE.get(struct.unpack("<h", r.bs().to_bytes(2, "little"))[0])
-        {"real": r.bd, "int32": r.bl, "int16": r.bs, "int8": r.bs, "point": r.bd3, "text": o.text}.get(kind, int)()
-        r.bl()
+    _expression(o)
     r.bl(), r.bl()  # AcDbShHistoryNode: version
     for _ in range(16):
         r.bd()  # where the primitive sits, as a 4x4 matrix
@@ -445,7 +493,7 @@ def _block_control(o: dwg.Obj) -> dict:
 
 
 def _block_header(o: dwg.Obj) -> dict:
-    name = _table_name(o)
+    name, skip = _table_name(o, True)
     r = o.r
     r.b(), r.b()  # anonymous, has attribs
     is_xref, overlaid = r.b(), r.b()
@@ -456,16 +504,19 @@ def _block_header(o: dwg.Obj) -> dict:
     base = r.bd3()
     path = o.text()
     xref = path if is_xref or overlaid else ""  # the file an external reference block stands for
-    layout = 0
+    layout, dictionary = 0, 0
     if since(o.release, "R2000"):
         while r.rc():  # one non-zero byte per insert, zero-terminated
             pass
         o.text()  # description
         preview_size = r.bl()
         r.p += preview_size * 8
+        handles = []
         while o.handles.p + 8 <= o.stop:  # the layout this block is the sheet of comes last
-            layout = o.handles.h(o.handle)
-    return {"name": name, "base": base, "xref": xref, "layout": layout, "units": r.bs() if since(o.release, "R2007") else 0}
+            handles.append(layout := o.handles.h(o.handle))
+        # owner, reactors, then the extension dictionary when there is one (looked up by what it must contain)
+        dictionary = handles[skip] if skip < len(handles) else 0
+    return {"name": name, "base": base, "xref": xref, "layout": layout, "dictionary": dictionary, "units": r.bs() if since(o.release, "R2007") else 0}
 
 
 def _entity_common(o: dwg.Obj) -> dict:
@@ -1618,6 +1669,7 @@ _OBJECTS = {
     "AEC_ANCHOR_OPENINGBASE_TO_WALL": ("anchors", _anchor),
     "AEC_VARS_DWG_SETUP": ("aec_units", _aec_setup),
     "ACDB_BLOCKREPRESENTATION_DATA": ("dynamic_blocks", _block_representation),
+    **{name: ("block_parameters", _block_parameter) for name in _PARAMETERS},
     "AEC_WALL_STYLE": ("aec_styles", _aec_style),
     "AEC_DOOR_STYLE": ("aec_styles", _aec_style),
     "AEC_WINDOW_STYLE": ("aec_styles", _aec_style),
@@ -1742,6 +1794,19 @@ def load(data: bytes) -> Drawing:
             kept = drawing.dictionaries.get(drawing.dictionaries.get(e["dictionary"], {}).get("AcDbBlockRepresentation"), {})
             if kept.get("AcDbRepData") in drawing.dynamic_blocks:
                 e["named"] = drawing.dynamic_blocks[kept["AcDbRepData"]]
+                # what this insert's parameters are set to: a record per node of the block's graph
+                graph = drawing.dictionaries.get(drawing.blocks.get(e["named"], {}).get("dictionary"), {}).get("ACAD_ENHANCEDBLOCK")
+                cache = drawing.dictionaries.get(drawing.dictionaries.get(kept.get("AppDataCache"), {}).get("ACAD_ENHANCEDBLOCKDATA"), {})
+                e["parameters"] = {}
+                for parameter in drawing.block_parameters.values():
+                    record = drawing.xrecords.get(cache.get(str(parameter["node"])), ()) if parameter["owner"] == graph else ()
+                    points, numbers, texts = ([value for code, value in record if code == wanted] for wanted in (10, 70, 1))
+                    if parameter["kind"] == "distance" and len(points) >= 2:
+                        e["parameters"][parameter["label"]] = math.dist(points[0], points[1])  # stored as its two ends
+                    elif parameter["kind"] == "flip" and len(numbers) == 3:  # two header numbers, then the state
+                        e["parameters"][parameter["label"]] = parameter["states"][bool(numbers[2])]
+                    elif parameter["kind"] == "state" and texts:
+                        e["parameters"][parameter["label"]] = texts[0]
         links = e.pop("links", ())
         made = steps.get(next((drawing.histories[h] for h in links if h in drawing.histories), None), ())
         links = [*links, *(step.get("material") for step in made)]

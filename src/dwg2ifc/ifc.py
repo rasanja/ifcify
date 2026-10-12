@@ -370,6 +370,14 @@ class _Builder:
             pset = f.createIfcPropertySet(ifcopenshell.guid.new(), None, name, None, properties)
             f.createIfcRelDefinesByProperties(ifcopenshell.guid.new(), None, None, None, products, pset)
 
+    def stored_set(self, name, description, stored, measure="IfcReal"):
+        """A property set of stored values in their own types, so that a BIM tool can edit them as numbers."""
+        f = self.f
+        kinds = {bool: "IfcBoolean", int: "IfcInteger", float: measure, str: "IfcText"}
+        listed = [f.createIfcPropertySingleValue(key, None, f.create_entity(kinds[type(value)], value), None)
+                  for key, value in stored.items() if type(value) in kinds]  # fmt: skip
+        return f.createIfcPropertySet(ifcopenshell.guid.new(), None, name, description or None, listed) if listed else None
+
     def describe(self, e, product) -> None:
         """What the DWG knows about an entity beyond its shape, as IFC properties."""
         layer = self.d.layers.get(e["layer"], {})
@@ -382,6 +390,8 @@ class _Builder:
         block = self.named(e)
         if block and not block["name"].startswith("*"):
             self.property_set("DWG_Block", {"BlockName": block["name"]} | ({"ExternalFile": block["xref"]} if block["xref"] else {}), [product])
+        if parameters := self.stored_set("DWG_BlockParameters", "What this insert's dynamic block parameters are set to", e.get("parameters", {}), "IfcLengthMeasure"):
+            self.f.createIfcRelDefinesByProperties(ifcopenshell.guid.new(), None, None, None, [product], parameters)
         tags = {}
         for tag, value in self.attributes.get(e["handle"], ()):
             n = sum(1 for k in tags if k == tag or k.startswith(tag + "_"))
@@ -660,13 +670,7 @@ class _Builder:
                  for name, handle in d.dictionaries.get(entries, {}).items()}  # fmt: skip
         mine = [e for e in self.by_owner.get(owner, []) if "aec" in e]
         walls, made, typed = {}, [], defaultdict(list)
-
-        def values(name, description, stored, measure="IfcReal"):
-            """A property set of stored values in their own types, so that a BIM tool can edit them as numbers."""
-            kinds = {bool: "IfcBoolean", int: "IfcInteger", float: measure, str: "IfcText"}
-            listed = [f.createIfcPropertySingleValue(key, None, f.create_entity(kinds[type(value)], value), None)
-                      for key, value in stored.items() if type(value) in kinds]  # fmt: skip
-            return f.createIfcPropertySet(ifcopenshell.guid.new(), None, name, description or None, listed) if listed else None
+        values = self.stored_set
 
         def schedule(handle):
             """The Architecture property sets attached to an object or style, named by their definitions."""
