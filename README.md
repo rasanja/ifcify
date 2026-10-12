@@ -12,14 +12,22 @@ DWG releases R14, R2000, R2004, R2007, R2010, R2013 and R2018.
 | DWG | IFC |
 |-----|-----|
 | Lines, arcs, circles, ellipses, polylines, splines, leaders | curves in an `IfcAnnotation` |
-| Text, multiline text, attributes | `IfcTextLiteralWithExtent` |
+| Text, multiline text, attributes | `IfcTextLiteralWithExtent`, with its colour, font and height as an `IfcTextStyle` |
 | Hatches, 2D solids | `IfcAnnotationFillArea` |
-| Blocks and their inserts, dimensions | `IfcRepresentationMap` placed by `IfcMappedItem` |
+| Blocks and their inserts, dimensions, tables | `IfcRepresentationMap` placed by `IfcMappedItem` |
 | Tolerances, multilines | text and curves |
 | Rays, construction lines | `IfcLine`, which is unbounded like they are |
 | 3D solids, regions, surfaces | `IfcAdvancedBrep` or a surface model, in an `IfcBuildingElementProxy` |
-| Meshes, polyface meshes, 3D faces | `IfcPolygonalFaceSet` |
-| Multileaders, wipeouts and custom entities | drawn from the picture of themselves they carry, when they have one |
+| Meshes, polyface meshes, 3D faces, subdivision meshes | `IfcPolygonalFaceSet` |
+| Helices | `IfcBSplineCurveWithKnots`, with the radius, turns and turn height as properties |
+| Multileaders | leader lines and one text (or the block they hold) |
+| Images, wipeouts | the outline of the frame; an image's file path as a property (the picture is not in the DWG) |
+| Lights | `IfcLightFixture` at the light's position, with its name, kind and intensity |
+| Shapes | a point, with the shape file and number as properties (the symbol is not in the DWG) |
+| Other custom entities | drawn from the picture of themselves they carry, when they have one |
+| Groups | `IfcGroup` |
+| Materials on solids | `IfcMaterial` |
+| Geographic location in a projected coordinate system | `IfcMapConversion` and `IfcProjectedCRS` |
 | Layers | `IfcPresentationLayerAssignment` |
 | Colours, line weights, linetypes | `IfcStyledItem` with curve, fill or surface styles |
 | Drawing units | IFC length unit |
@@ -30,7 +38,8 @@ A DWG holds lines on layers, not walls and rooms. The converter adds building in
 
 - **Properties.** Every converted entity carries its layer, entity type, colour and linetype. Block inserts
   carry their block name and their attributes (door numbers, room data). Data attached by other programs
-  is carried over too.
+  is carried over too, both kinds a DWG has: extended data (`DWG_XData_<program>`) and records in the
+  entity's extension dictionary (`DWG_Record_<name>`). Derived rooms carry the records of their outline.
 - **Classes and types from names.** A layer or block whose name says what it is (`A-DOOR`, `Windows`,
   `PRTA0001`, `Fluorescent Fixture`) makes its solids and block inserts IFC doors, windows, light fixtures,
   furniture and so on. A named block recognised this way becomes a type and its inserts occurrences of it;
@@ -100,6 +109,14 @@ used rather than recomputed:
 - The width of a wide polyline, when it is the same along its length.
 - The thickness (extrusion height) of a 2D entity, kept as a property. It is not yet used as a height.
 - A dimension's measurement.
+- The sizes a solid was made with. AutoCAD keeps the length, width and height of a box or wedge, the
+  radius of a sphere, the height and radii of a cylinder or cone, and the two radii of a torus, in the
+  solid's history. They are written to `DWG_Stored` when that primitive is the solid's only modelling
+  step; after a fillet, a cut or a union they no longer describe the solid and are left out. Drawings
+  saved as R2004 or older have no history.
+- A helix's radius, number of turns and turn height.
+- Text style: the font each text is drawn with, and whether it is slanted.
+- Layout names, group names and descriptions, and material names.
 
 **Exact only if the drawing declares its unit.** Coordinates are written in the drawing's own unit. Real
 sizes, and floor areas in square metres, depend on which unit that is. A drawing that declares none is
@@ -114,7 +131,11 @@ every real-world size is wrong by the same factor.
 - "By block" colour and linetype take the layer's. Palette colour 7, which AutoCAD shows white on a dark
   screen and black on paper, is written black for linework and white on solids.
 - Text: single-line text stores no size, so the box around it is estimated from the character count.
-  Fonts, width factor and alignment are not carried over. Multiline text loses its inline formatting.
+  The font is named but the width factor and alignment are not carried over, so text may sit slightly
+  differently. Multiline text loses its inline formatting. An SHX font is named by its file (`romans.shx`).
+- Subdivision meshes are written as the cage they are smoothed from; a mesh with smoothing levels comes
+  out faceted.
+- A solid with different materials on different faces lists them all; which face has which is not kept.
 - Dimensions saved without their drawn form are redrawn as plain lines and a number, without arrowheads
   and without the drawing's unit format (a length shows as `144`, not `12'-0"`).
 
@@ -123,6 +144,11 @@ every real-world size is wrong by the same factor.
 - The width of a polyline that tapers or changes width along its length; it comes out with no width.
 - Hatch patterns; a hatch becomes a plain fill of its boundary, and holes rely on the order of its loops.
 - Linetype scale, and shapes or text inside a linetype.
+- Arrowheads of a multileader saved without its picture, and the frame of a wipeout as a mask: it is an
+  outline only and hides nothing.
+- A geographic location given as latitude and longitude (it needs a map projection); only locations in a
+  projected coordinate system are written. The written form has not been checked against a geolocated
+  drawing, as none was available.
 
 **A reading, not a fact.** The derived elements are found by rules, and a rule can pick the wrong lines:
 
@@ -136,7 +162,7 @@ every real-world size is wrong by the same factor.
 
 Model space goes into one storey: `IfcProject > IfcSite > IfcBuilding > IfcBuildingStorey`. A drawing
 with nothing in model space, such as a title block, is exported as its paper-space layouts instead,
-one storey per layout.
+one storey per layout, named after the layout.
 
 A drawing placed far from the origin, as survey drawings are, is written relative to a local origin so
 viewers can display it. Its real position is kept in the file as `IfcMapConversion`.
@@ -145,7 +171,10 @@ Entities on layers that are switched off or frozen, and entities marked invisibl
 AutoCAD hides them. Room outlines are the exception: they are read from hidden layers too, because
 offices often keep them there.
 
-Not converted: lights, custom entities that carry no picture of themselves, and paper-space layouts of drawings that also have a model. Every entity left out, for any of these
+Not converted: custom entities that carry no picture of themselves, and paper-space layouts of drawings
+that also have a model. AutoCAD Architecture objects (walls, doors, windows as objects rather than
+linework) are in the first group: they are drawn from their picture and their heights and styles are
+not read yet, because no drawing containing them was available to check a decoder against. Every entity left out, for any of these
 reasons, is counted by reason in the `X-DWG-Skipped` response header. The properties listed above as not
 carried over are dropped without a count.
 
@@ -237,7 +266,9 @@ Path("drawing.ifc").write_text(ifc_text)
 - DWG R13 uses the R14 code path and is untested.
 - Solids in drawings saved as R2000 or R14 lose their rounded (filleted) faces; the rest of the solid converts.
 - IFC4X3 has no cone surface, so cone faces are written as surfaces of revolution. Viewer support for that varies.
-- Text is positioned and sized, but fonts and exact alignment are not carried over.
+- Text is positioned, sized and given its font, but exact alignment and width factor are not carried over.
+- Arc-length and jogged-radius dimensions are placed by the block AutoCAD drew for them; this path could
+  not be checked against AutoCAD, whose console cannot create them without a mouse pick.
 
 ## Development
 
