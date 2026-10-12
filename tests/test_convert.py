@@ -85,9 +85,8 @@ def test_floor_plan_ifc_content():
 def test_conference_room_solids_become_breps():
     text, skipped = convert((ASSETS / "visualization_-_conference_room.dwg").read_bytes())
     model = ifcopenshell.file.from_string(text)
-    # 327 ACIS faces; the 6 on self-intersecting tori have no IFC surface and are reported instead
-    # and 3 swept tubes are each written as two halves, so 330
-    assert len(model.by_type("IfcAdvancedFace")) == 330
+    # 327 ACIS faces; 3 swept tubes and 6 rounded rims are each written as two halves, so 336
+    assert len(model.by_type("IfcAdvancedFace")) == 336
     assert skipped == {}
     lights = model.by_type("IfcLightFixture")
     # six point lights, and six inserts of the block "Fluorescent Fixture" (which holds two lights of its own)

@@ -356,14 +356,18 @@ Path("drawing.ifc").write_text(ifc_text)
   `units` in the request.
 - IFC4X3 has no cone surface, so cone faces are written as surfaces of revolution. Viewer support for that varies.
 - Some curved faces of solids do not come through IfcOpenShell (and so Bonsai) as AutoCAD has them. Measured
-  against AutoCAD on the two 3D test drawings, 66 of 82 solids match its surface area within 0.2 percent.
-  The rest have a face of one of these kinds: the rounded end of a pin (a torus that crosses its own
-  axis), a sliver a few thousandths of a unit wide, or a long narrow strip that the kernel builds but its
-  mesher leaves empty at fine settings. For those the output can show a missing or oversized face.
-  Two shapes are written differently from how AutoCAD stores them, without moving any point, because
+  against AutoCAD on the two 3D test drawings, 70 of 82 solids match its surface area within 0.2 percent.
+  The rest have a face of one of these kinds:
+  - the rounded end of a pin (a torus that crosses its own axis). IFC has no torus of that kind, so it is
+    written as an exact rational spline surface. IfcOpenShell ignores the weights of such a surface and
+    draws it bulged: 1 to 2 percent too much area on those solids;
+  - a sliver a few thousandths of a unit wide, which comes out as a whole disc;
+  - a long narrow strip that the kernel builds but its mesher leaves empty at fine settings.
+  Three shapes are written differently from how AutoCAD stores them, without moving any point, because
   IfcOpenShell cannot build the stored form: a patch of a sphere is a revolved arc (it does not read
-  `IfcSphericalSurface`), and a tube swept along a path (a cable, a handrail) is two half-tubes joined
-  along its length where AutoCAD has one face closed on itself.
+  `IfcSphericalSurface`); a tube swept along a path (a cable, a handrail) is two half-tubes joined
+  along its length where AutoCAD has one face closed on itself; and the rounded rim of a disc is two
+  half rims, because given only its two circles the kernel builds the rest of the torus instead.
 - Text is positioned, aligned, sized and given its font. Its width factor is a property only, so a viewer
   draws it at normal width.
 - Arc-length and jogged-radius dimensions are placed by the block AutoCAD drew for them. Saved without

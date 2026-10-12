@@ -60,3 +60,32 @@ def test_a_swept_tube_is_built_whole():
     assert all(len(loop) == 4 for face in faces[:2] for loop in face["loops"]) and all(len(face["loops"][0]) == 2 for face in faces[2:])
     built, _ = accuracy.built(ifc.build(one, "tube")[0])
     assert built[0x7D5]["area"] == pytest.approx(11.7376, rel=2e-3)  # AutoCAD's own figure for this solid
+
+
+def test_a_rounded_rim_is_the_band_between_its_circles():
+    """A disc with a rounded edge: a torus face bounded by two whole circles. A kernel given only those takes the
+    rest of the torus; cut in two halves with a side each, it has no choice."""
+    import copy
+    import math
+
+    import pytest
+
+    from dwg2ifc import entities, ifc
+
+    drawing = entities.load((FIXTURES / "entities_2018.dwg").read_bytes())
+    solid = next(e for e in drawing.entities if e["type"] == "3DSOLID" and e["owner"] == drawing.spaces["model"])
+    z, x, major, minor = (0.0, 0.0, 1.0), (1.0, 0.0, 0.0), 3.0, 0.5
+    low = ("low", (major + minor, 0.0, 0.0), (major + minor, 0.0, 0.0), ("ellipse", (0.0, 0.0, 0.0), z, (major + minor, 0.0, 0.0), 1.0), True)
+    high = ("high", (major, 0.0, minor), (major, 0.0, minor), ("ellipse", (0.0, 0.0, minor), z, (major, 0.0, 0.0), 1.0), True)
+    faces = [
+        {"surface": ("torus", (0.0, 0.0, 0.0), z, major, minor, x), "loops": [[(*low, True)], [(*high, False)]], "same_sense": True, "double": False},
+        {"surface": ("plane", (0.0, 0.0, 0.0), (0.0, 0.0, -1.0), x), "loops": [[(*low, False)]], "same_sense": True, "double": False},
+        {"surface": ("plane", (0.0, 0.0, minor), z, x), "loops": [[(*high, True)]], "same_sense": True, "double": False},
+    ]
+    cut = ifc._open_bands(copy.deepcopy(faces))
+    assert [[len(loop) for loop in face["loops"]] for face in cut] == [[4], [4], [2], [2]]  # two halves; each disc now meets two half circles
+    one = copy.copy(drawing)
+    one.entities = [dict(solid, bodies=[{"faces": faces}])]
+    built, _ = accuracy.built(ifc.build(one, "rim")[0])
+    exact = math.pi * (major + minor) ** 2 + math.pi * major**2 + 2 * math.pi * minor * (major * math.pi / 2 + minor)
+    assert built[solid["handle"]]["area"] == pytest.approx(exact, rel=2e-3)

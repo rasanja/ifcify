@@ -299,13 +299,68 @@ def _open_tubes(faces) -> list:
             walks = [[(*edge[:5], not edge[5]) for edge in reversed(walk)] for walk in walks]
         for (knots, repeats, half), walk in zip(((lk, lm, left), (rk, rm, right)), walks):
             made.append(dict(face, surface=("bspline", du, dv, knots, repeats, kv, mv, half, (False, False)), loops=[walk], same_sense=face["same_sense"] != turned))
-    for face in made if swaps else ():
+    return _swapped(made, swaps)
+
+
+def _swapped(faces, swaps) -> list:
+    """Faces with every whole rim that was cut in two replaced by its halves, so neighbours still share edges."""
+    for face in faces if swaps else ():
         for loop in face["loops"]:
             for i in reversed(range(len(loop))):
-                if loop[i][0] in swaps:  # a neighbour bounded by a whole rim now meets its two halves
-                    with_u, first, second = swaps[loop[i][0]]
-                    loop[i : i + 1] = [(*first, True), (*second, True)] if with_u == loop[i][5] else [(*second, False), (*first, False)]
-    return made
+                if loop[i][0] in swaps:
+                    along, first, second = swaps[loop[i][0]]
+                    loop[i : i + 1] = [(*first, True), (*second, True)] if along == loop[i][5] else [(*second, False), (*first, False)]
+    return faces
+
+
+def _open_bands(faces) -> list:
+    """Faces with every torus band between two whole circles cut into two halves.
+
+    The rounded rim of a disc is one face on a torus, bounded by two circles about its axis and nothing between
+    them. Two such circles bound two bands, and IfcOpenShell takes the other one (or, on a torus that crosses its
+    own axis, builds nothing). Each half is bounded on all four sides: half of either circle and two arcs of the
+    tube. Nothing moves; the arcs lie on the torus.
+    """
+    swaps, made = {}, []
+    for face in faces:
+        s, loops = face["surface"], face["loops"]
+        rims = [loop[0] for loop in loops if len(loop) == 1 and loop[0][1] and loop[0][3] and loop[0][3][0] == "ellipse" and _same(loop[0][1], loop[0][2])]
+        if not (s and s[0] == "torus" and len(loops) == 2 and len(rims) == 2 and s[4]):
+            made.append(face)
+            continue
+        _, center, axis, major, minor, _ = s
+        z, minor = _unit(axis), abs(minor)
+        spots = []  # each circle's radius, height on the axis, and which way its loop goes round
+        for _, _, _, (_, middle, normal, reach, ratio), same_sense, forward in rims:
+            off = tuple(m - c for m, c in zip(middle, center))
+            height, lean = sum(a * b for a, b in zip(off, z)), sum(a * b for a, b in zip(_unit(normal), z))
+            if ratio != 1.0 or abs(lean) < 1 - 1e-9 or math.dist(off, tuple(height * c for c in z)) > 1e-6 * minor:
+                break  # not a circle about the torus axis
+            spots.append((math.sqrt(sum(c * c for c in reach)), height, (lean > 0) == (same_sense == forward)))
+        if len(spots) != 2 or spots[0][2] == spots[1][2]:
+            made.append(face)
+            continue
+        # the same radius and height lie on the outer lobe or, where the torus crosses its axis, on the inner one
+        side = min((1.0, -1.0), key=lambda t: sum(abs((t * r - major) ** 2 + h * h - minor * minor) for r, h, _ in spots))
+        angles = [math.atan2(h, side * r - major) % (2 * math.pi) if side < 0 else math.atan2(h, side * r - major) for r, h, _ in spots]
+        out = tuple(p - c for p, c in zip(rims[0][1], center))
+        d = _unit(tuple(o - sum(a * b for a, b in zip(out, z)) * c for o, c in zip(out, z)))
+        ends, walks = [], []  # per circle: its points on the near and far side, and its halves in the loop's order
+        for (key, _, _, curve, same_sense, forward), (radius, _, _) in zip(rims, spots):
+            near, far = (tuple(m + t * radius * c for m, c in zip(curve[1], d)) for t in (1.0, -1.0))
+            halves = ((key, "near"), near, far, curve, same_sense), ((key, "far"), far, near, curve, same_sense)
+            swaps[key] = (True, *halves)
+            ends.append((near, far))
+            walks.append([(*halves[0], True), (*halves[1], True)] if forward else [(*halves[1], False), (*halves[0], False)])
+        arcs = []
+        for i, t in enumerate((side, -side)):  # the tube's circle on the near side, then on the far side
+            e = tuple(t * c for c in d)
+            normal = _cross(e, z) if angles[1] > angles[0] else _cross(z, e)
+            curve = ("ellipse", tuple(c + major * a for c, a in zip(center, e)), normal, tuple(minor * a for a in e), 1.0)
+            arcs.append(((rims[0][0], rims[1][0], i), ends[0][i], ends[1][i], curve, True))
+        made.append(dict(face, loops=[[walks[0][0], (*arcs[1], True), walks[1][1], (*arcs[0], False)]]))
+        made.append(dict(face, loops=[[walks[0][1], (*arcs[0], True), walks[1][0], (*arcs[1], False)]]))
+    return _swapped(made, swaps)
 
 
 class _Builder:
@@ -1420,12 +1475,27 @@ class _Builder:
                 return None, False
             if 0 < abs(minor) < major:
                 return self.f.createIfcToroidalSurface(self.axes(center, axis, u), major, abs(minor)), minor < 0
-            # IfcToroidalSurface cannot describe a torus that crosses its own axis (the rounded end of a pin, say),
-            # so the tube circle is revolved instead. IfcOpenShell does not build this face; revolving only the
-            # part of the circle on its own side of the axis, which would be tidier, makes it hang (tried 2026-10-12).
-            origin = self.f.createIfcAxis2Placement2D(self.f.createIfcCartesianPoint((float(major), 0.0)))
-            tube = self.trimmed(self.f.createIfcCircle(origin, abs(minor)), 0.0, 2 * math.pi)
-            return self.revolution(center, axis, u, tube), minor < 0
+            # IfcToroidalSurface cannot describe a torus that crosses its own axis (the rounded end of a pin, say).
+            # It is written as an exact rational spline surface: the arc of the tube's circle the face lies on,
+            # turned about the axis. IfcOpenShell 0.9 ignores surface weights and draws it bulged by up to 6 %;
+            # it builds nothing at all of the same arc as an IfcSurfaceOfRevolution (tried 2026-10-12).
+            z, minor = _unit(axis), abs(surface[4])
+            reach = [tuple(p[i] - center[i] for i in range(3)) for loop in face["loops"] for _, a, b, *_ in loop for p in (a, b) if p]
+            spots = [(math.sqrt(max(0.0, sum(c * c for c in v) - h * h)), h) for v in reach for h in [sum(a * b for a, b in zip(v, z))]]
+            # the same radius and height lie on the outer lobe or on the inner one (the profile's far side of the axis)
+            side = min((1.0, -1.0), key=lambda t: sum(abs((t * r - major) ** 2 + h * h - minor * minor) for r, h in spots))
+            angles = [math.atan2(h, side * r - major) % (2 * math.pi) if side < 0 else math.atan2(h, side * r - major) for r, h in spots] or [0.0]
+            margin = 0.1 * (max(angles) - min(angles)) + 0.02
+            low, high = min(angles) - margin, max(angles) + margin
+            pieces = math.ceil((high - low) / (math.pi / 2))  # each a quarter turn at most, as a rational quadratic arc
+            half = (high - low) / pieces / 2
+            profile = [
+                (major + far * math.cos(low + i * half), far * math.sin(low + i * half), weight)
+                for i in range(2 * pieces + 1)
+                for far, weight in [(minor / math.cos(half), math.cos(half)) if i % 2 else (minor, 1.0)]
+            ]
+            knots = [float(i) for i in range(pieces + 1)]
+            return self.revolved(center, axis, u, profile, 2, [3, *[2] * (pieces - 1), 3], knots), surface[4] < 0
         _, degree_u, degree_v, ku, mu, kv, mv, grid, *closed = surface
         closed_u, closed_v = closed[0] if closed else (False, False)
         fixed_u, fixed_v = self.nurbs_knots(ku, mu, degree_u), self.nurbs_knots(kv, mv, degree_v)
@@ -1493,7 +1563,7 @@ class _Builder:
             return vertices[key]
 
         closed = True
-        for face in _open_tubes(body["faces"]):
+        for face in _open_bands(_open_tubes(body["faces"])):
             surface, flipped = self.acis_surface(face["surface"], face) if face["surface"] else (None, False)
             loops, ok = [], surface is not None
             for loop in face["loops"] if ok else ():
