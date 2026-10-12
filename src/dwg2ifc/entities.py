@@ -1122,6 +1122,59 @@ def _table(o, r):
     return e
 
 
+def _mleader(o, r):
+    """MULTILEADER: leader lines running to a text or a block (AcDbMLeaderObjectContextData::dwgInMLContextData).
+
+    Returned as parts, the form custom entities take: a polyline per leader line, then the content.
+    """
+    newer = since(o.release, "R2010")
+    if newer:
+        r.bs()  # version
+    parts, lines = [], 0
+    for _ in range(r.bl()):  # a root is one side of the content, where its leader lines meet
+        r.b(), r.b()
+        connection, direction = r.bd3(), r.bd3()
+        for _ in range(r.bl()):
+            r.bd3(), r.bd3()  # gaps where the landing crosses other objects
+        r.bl()
+        landing = r.bd()
+        end = tuple(connection[i] + landing * direction[i] for i in range(3))
+        for _ in range(r.bl()):
+            points = [r.bd3() for _ in range(r.bl())]
+            for _ in range(r.bl()):  # gaps in the line itself
+                r.bl()
+                for _ in range(r.bl()):
+                    r.bd3(), r.bd3()
+            r.bl()
+            if newer:
+                r.bs()
+                _colour(o)
+                r.bl(), r.bd(), r.bl()  # per-line overrides of weight and arrow size
+                lines += 1
+            parts.append({"type": "POLYLINE_3D", "points": [*points, connection, end], "closed": False})
+        if newer:
+            r.bs()
+    r.bd(), r.bd3()  # overall scale, content base point
+    height = r.bd()
+    r.bd(), r.bd()  # arrow size, landing gap
+    r.bs(), r.bs(), r.bs(), r.bs()  # attachment and alignment
+    for _ in range(2 * lines):
+        o.handles.h(o.handle)  # each line's linetype and arrowhead
+    e = {"parts": parts, "height": height}
+    if r.b():  # text content: the same values an MTEXT holds
+        text = {"type": "MTEXT", "text": o.text(), "extrusion": r.bd3(), "point": r.bd3(), "x_axis": r.bd3(), "height": height}
+        r.bd()  # rotation
+        text["extent"] = (r.bd(), r.bd())
+        e["style"] = o.handles.h(o.handle)
+        parts.append(text)
+    elif r.b():  # block content
+        block = {"type": "INSERT", "block": o.handles.h(o.handle), "extrusion": r.bd3(), "point": r.bd3(), "scale": r.bd3(), "rotation": r.bd()}
+        # shortcut: the location is used as it stands, which is right for content lying flat (normal along z)
+        parts.append(block)
+    r.p = o.end  # the settings the style supplies, and the arrowheads, are not read
+    return e
+
+
 def _shape(o, r):
     """SHAPE (AcDbImpShape): a symbol from a compiled shape file, which the drawing names but does not contain."""
     e = {"point": r.bd3(), "size": r.bd(), "rotation": r.bd()}
@@ -1184,6 +1237,7 @@ _DECODERS = {
     "ACAD_TABLE": _table,
     "LIGHT": _light,
     "SHAPE": _shape,
+    "MULTILEADER": _mleader,
     "ARC_DIMENSION": _dimension,
     "LARGE_RADIAL_DIMENSION": _dimension,
 } | {
@@ -1280,6 +1334,12 @@ def load(data: bytes) -> Drawing:
                 entity |= _DECODERS[o.type](o, o.r)
                 if "block" in entity and graphics:
                     entity["picture"] = graphics  # drawn from this if the block turns out to be missing
+                if o.type == "MULTILEADER" and graphics:
+                    # the picture has the arrowheads too: keep its linework, and our text as one editable piece
+                    drawn = proxy.decode(graphics, release)
+                    text = [p for p in entity["parts"] if p["type"] == "MTEXT"]
+                    entity["native"] = entity["parts"]
+                    entity["parts"] = [p for p in drawn if p["type"] != "PROXYTEXT"] + text if text and drawn else drawn or entity["parts"]
                 if o.r.p != o.end:
                     raise ValueError(f"{o.type} {o.handle:X} decoded to bit {o.r.p}, expected {o.end}")
                 if o.thickness:

@@ -104,16 +104,21 @@ def test_conference_room_solids_become_breps():
     assert model.by_type("IfcBSplineSurfaceWithKnots") and model.by_type("IfcToroidalSurface")
 
 
-def test_unknown_entities_are_drawn_from_their_proxy_graphics():
-    # MULTILEADER has no decoder; each one carries a drawing of itself (leader lines, arrowheads, text)
+def test_multileaders_keep_their_text_whole_and_their_drawn_linework():
     drawing = entities.load((ASSETS / "architectural_-_annotation_scaling_and_multileaders.dwg").read_bytes())
     leaders = [e for e in drawing.entities if e["type"] == "MULTILEADER"]
     assert len(leaders) == 36 and "MULTILEADER" not in drawing.skipped
+    # 33 hold text, read as one paragraph each; 3 hold a block, drawn from the picture they carry (6 attribute texts)
     kinds = Counter(part["type"] for e in leaders for part in e["parts"])
-    assert kinds == {"POLYLINE_3D": 111, "PROXYTEXT": 62, "ELLIPSE": 3}
-    assert "EPDM ROOF CONSTRUCTION:" in {part.get("text") for e in leaders for part in e["parts"]}
+    assert kinds == {"POLYLINE_3D": 111, "MTEXT": 33, "PROXYTEXT": 6, "ELLIPSE": 3}
+    assert any(part.get("text", "").startswith("EPDM ROOF CONSTRUCTION:\\PEPDM ROOFING MEMBRANE") for e in leaders for part in e["parts"])
+    # our own reading of the leader lines agrees with the picture: each line's corners are drawn there
+    for e in leaders:
+        drawn = {tuple(round(c, 6) for c in p) for part in e["parts"] if part["type"] == "POLYLINE_3D" for p in part["points"]}
+        for line in (part for part in e["native"] if part["type"] == "POLYLINE_3D"):
+            assert {tuple(round(c, 6) for c in p) for p in line["points"][-2:]} <= drawn
     text, skipped = convert((ASSETS / "architectural_-_annotation_scaling_and_multileaders.dwg").read_bytes())
-    assert "MULTILEADER" not in skipped and "'EPDM ROOF CONSTRUCTION:'" in text
+    assert "MULTILEADER" not in skipped and "EPDM ROOF CONSTRUCTION:" in text
 
 
 def test_title_block_drawings_export_their_layouts():

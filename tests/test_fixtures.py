@@ -297,6 +297,13 @@ def test_entities_that_point_at_other_data(path):
     assert (one["SHAPE"]["point"], one["SHAPE"]["size"]) == ((120.0, 230.0, 0.0), 2.0)
     assert drawing.styles[one["SHAPE"]["style"]]["font"].lower() == "ltypeshp.shx"
 
+    # MLEADER 0,300 10,305 "Leader text": the arrow point, the landing, and the text beside it
+    leader = next(e for e in drawing.entities if e["type"] == "MULTILEADER")
+    line, text = leader["native"]
+    assert line["points"][:2] == [(0.0, 300.0, 0.0), (10.0, 305.0, 0.0)] and line["points"][2][1] == 305.0
+    assert (text["text"], text["x_axis"]) == ("Leader text", (1.0, 0.0, 0.0)) and text["point"][0] > line["points"][2][0]
+    assert drawing.styles[leader["style"]]["name"].upper() == "STANDARD"
+
     names = {handle: name for entries in drawing.dictionaries.values() for name, handle in entries.items()}
     (handle, group), = drawing.groups.items()
     assert (names[handle], group["description"]) == ("PAIR", "A line and a circle")
