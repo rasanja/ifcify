@@ -226,3 +226,41 @@ def test_solids_saved_without_a_ready_made_surface():
     assert len(extruded) >= 2
     for low, high in extruded[0][7]:
         assert (high[1], high[2]) == (low[1], low[2]) and high[0] - low[0] == pytest.approx(2.9363615069628164)
+
+
+def test_architecture_objects_become_elements_with_their_stored_sizes():
+    """AutoCAD Architecture walls, doors, windows and openings: sizes are the objects' own, nothing is assumed."""
+    sample = ASSETS / "THREE BEDROOM HOUSE PLAN.dwg"
+    if not sample.exists():
+        pytest.skip("sample not present")
+    drawing = entities.load(sample.read_bytes())
+    assert not drawing.skipped
+    found = Counter((e["type"], e["aec"]["height"], e["aec"]["width"]) for e in drawing.entities if "aec" in e)
+    assert found[("AEC_WALL", 3200.0, 230.0)] == 46 and found[("AEC_WALL", 3200.0, 300.0)] == 2
+    assert found[("AEC_DOOR", 2500.0, 900.0)] == 8 and found[("AEC_WINDOW", 1500.0, 1500.0)] == 4
+    assert sum(found.values()) == 80
+    # every door, window and opening is tied to a wall, and placed square to the world's vertical
+    walls = {e["handle"] for e in drawing.entities if e["type"] == "AEC_WALL"}
+    hosted = [e["aec"] for e in drawing.entities if "aec" in e and e["type"] != "AEC_WALL"]
+    assert len(hosted) == 32 and all(drawing.anchors[a["anchor"]] in walls and a["axes"][2] == (0.0, 0.0, 1.0) for a in hosted)
+
+    model = ifcopenshell.file.from_string(convert(sample.read_bytes())[0])
+    # only the real walls: none guessed from linework next to them
+    assert Counter(p.is_a() for p in model.by_type("IfcElement")) == {"IfcWall": 48, "IfcOpeningElement": 32, "IfcWindow": 12, "IfcDoor": 10}
+    assert len(model.by_type("IfcRelVoidsElement")) == 32 and len(model.by_type("IfcRelFillsElement")) == 22
+    types = {(t.is_a(), t.Name): len(t.Types[0].RelatedObjects) for t in model.by_type("IfcTypeProduct") if t.Types}
+    assert types == {("IfcWallType", "Brick-X"): 48, ("IfcDoorType", "Standard"): 9, ("IfcDoorType", "Hinged - Double"): 1, ("IfcWindowType", "Standard"): 12}
+    wall = model.by_type("IfcWall")[0]
+    stored = ifcopenshell.util.element.get_psets(wall)["DWG_Architecture"]
+    assert (stored["Style"], stored["Height"], stored["Width"]) == ("Brick-X", "3200.0", "230.0")
+    body = wall.Representation.Representations[0].Items[0]
+    assert (body.Depth, body.SweptArea.YDim, body.SweptArea.XDim) == (3200.0, 230.0, pytest.approx(float(stored["Length"])))
+    # each opening sits inside its wall: along its length, and between its floor and its top
+    for rel in model.by_type("IfcRelVoidsElement"):
+        host, hole = rel.RelatingBuildingElement.Representation.Representations[0].Items[0], rel.RelatedOpeningElement
+        x, _, z = hole.ObjectPlacement.RelativePlacement.Location.Coordinates
+        cut = hole.Representation.Representations[0].Items[0]
+        assert -1e-6 <= x - cut.SweptArea.XDim / 2 and x + cut.SweptArea.XDim / 2 <= host.SweptArea.XDim + 1e-6
+        assert -1e-6 <= z and z + cut.Depth <= host.Depth + 1e-6
+    door = next(p for p in model.by_type("IfcDoor"))
+    assert (door.OverallWidth, door.OverallHeight) in {(900.0, 2500.0), (800.0, 2500.0), (1200.0, 2500.0)}

@@ -333,7 +333,10 @@ class _Builder:
                 f.createIfcRelContainedInSpatialStructure(ifcopenshell.guid.new(), None, None, None, products, storey)
             if handle == model_space:
                 self.spaces(storey, handle)
-                self.walls(storey, handle)
+                # real wall objects make guessing walls from linework pointless, and the guesses would double them
+                if not any(e["type"] == "AEC_WALL" and "aec" in e for e in self.by_owner.get(handle, [])):
+                    self.walls(storey, handle)
+                self.architecture(storey, handle)
                 self.columns(storey, handle)
         self.groups()
         made = {}
@@ -592,6 +595,99 @@ class _Builder:
             # the layer set is centred on the axis
             usage = f.createIfcMaterialLayerSetUsage(layers, "AXIS2", "POSITIVE", -thickness / 2, None)
             f.createIfcRelAssociatesMaterial(ifcopenshell.guid.new(), None, None, None, occurrences, usage)
+
+    def architecture(self, storey, owner) -> None:
+        """Walls, doors, windows and openings kept as AutoCAD Architecture objects, with the sizes the drawing stores.
+
+        Nothing here is assumed or measured from linework: height, width, length and position are the object's own.
+        Laid out like the derived walls (placed at the start of the axis, a rectangle extruded upwards).
+        """
+        f, shift, d = self.f, self.origin_shift, self.d
+        dot = lambda a, b: sum(x * y for x, y in zip(a, b))  # noqa: E731
+        styles = {handle: name for key, entries in self.root.items() if key.startswith("AEC_") and key.endswith("_STYLES")
+                  for name, handle in d.dictionaries.get(entries, {}).items()}  # fmt: skip
+        mine = [e for e in self.by_owner.get(owner, []) if "aec" in e]
+        walls, made, typed = {}, [], defaultdict(list)
+
+        def shape(*representations):
+            return f.createIfcProductDefinitionShape(None, None, list(representations))
+
+        def box(length, depth, tall, centre=(0.0, 0.0)):
+            at = f.createIfcAxis2Placement2D(f.createIfcCartesianPoint(tuple(map(float, centre))))
+            solid = f.createIfcExtrudedAreaSolid(f.createIfcRectangleProfileDef("AREA", None, at, float(length), float(depth)), None, self.direction(_Z), float(tall))
+            return f.createIfcShapeRepresentation(self.body_context, "Body", "SweptSolid", [solid])
+
+        def describe(e, product, sizes):
+            a = e["aec"]
+            style = styles.get(a["style"], "")
+            layer = d.layers.get(e["layer"], {}).get("name", "0")
+            self.described[layer, e["type"], "by layer", "by layer"].append(product)
+            self.property_set("DWG_Architecture", {"Style": style, "Source": "AutoCAD Architecture object; sizes as stored in the drawing"} | sizes, [product])
+            typed[product.is_a(), style].append(product)
+            made.append(product)
+
+        for e in mine:
+            a = e["aec"]
+            if e["type"] != "AEC_WALL" or "length" not in a or min(a["length"], a["width"], a["height"]) <= 0:
+                continue
+            length, width, height = a["length"], a["width"], a["height"]
+            # where the wall's body lies across its baseline: the stored box says, else the justification (0.5 is centred)
+            side = a["bounds"][0][1] if "bounds" in a else -width * a["justification"]
+            x, _, z = a["axes"]
+            start = f.createIfcAxis2Placement3D(f.createIfcCartesianPoint(tuple(float(c - s) for c, s in zip(a["origin"], shift))), self.direction(z), self.direction(x))
+            axis = f.createIfcPolyline([f.createIfcCartesianPoint((0.0, 0.0)), f.createIfcCartesianPoint((float(length), 0.0))])
+            wall = f.create_entity(
+                "IfcWall", GlobalId=ifcopenshell.guid.new(), Name=f"Wall {styles.get(a['style'], '')}".strip(), ObjectType="AEC_WALL", Tag=f"{e['handle']:X}",
+                ObjectPlacement=f.createIfcLocalPlacement(storey.ObjectPlacement, start),
+                Representation=shape(box(length, width, height, (length / 2, side + width / 2)), f.createIfcShapeRepresentation(self.axis_context, "Axis", "Curve2D", [axis])),
+            )  # fmt: skip
+            walls[e["handle"]] = (wall, a, side)
+            describe(e, wall, {"Length": length, "Width": width, "Height": height, "Justification": a["justification"]})
+
+        for e in mine:
+            a = e["aec"]
+            if e["type"] == "AEC_WALL" or min(a["width"], a["height"]) <= 0:
+                continue
+            host = walls.get(d.anchors.get(a["anchor"]))
+            corner, edges = (a["bounds"][0], a["bounds"][1:]) if "bounds" in a else ((0.0, 0.0, 0.0), ((a["width"], 0, 0), (0, 0, 0), (0, 0, a["height"])))
+            across, deep, tall = edges[0][0], edges[1][1], edges[2][2]
+            kind = {"AEC_DOOR": "IfcDoor", "AEC_WINDOW": "IfcWindow"}.get(e["type"])
+            if host is None:
+                if kind:  # not in a wall: stands where its own placement puts it
+                    x, _, z = a["axes"]
+                    at = f.createIfcAxis2Placement3D(f.createIfcCartesianPoint(tuple(float(c - s) for c, s in zip(a["origin"], shift))), self.direction(z), self.direction(x))
+                    placement = f.createIfcLocalPlacement(storey.ObjectPlacement, at)
+                    body = box(across, deep or a["width"] / 20, tall, (corner[0] + across / 2, corner[1] + deep / 2))
+            else:
+                wall, w, side = host
+                offset = tuple(p - q for p, q in zip(a["origin"], w["origin"]))
+                along, up = dot(offset, w["axes"][0]), dot(offset, w["axes"][2])
+                ends = sorted(along + dot(a["axes"][0], w["axes"][0]) * c for c in (corner[0], corner[0] + across))
+                middle = ((ends[0] + ends[1]) / 2, side + w["width"] / 2, up + corner[2])
+                placement = f.createIfcLocalPlacement(wall.ObjectPlacement, f.createIfcAxis2Placement3D(f.createIfcCartesianPoint(tuple(map(float, middle)))))
+                opening = f.create_entity(
+                    "IfcOpeningElement", GlobalId=ifcopenshell.guid.new(), Name="Opening", ObjectPlacement=placement,
+                    Representation=shape(box(ends[1] - ends[0], w["width"], tall)), PredefinedType="OPENING",
+                )  # fmt: skip
+                f.createIfcRelVoidsElement(ifcopenshell.guid.new(), None, None, None, wall, opening)
+            if not kind:
+                continue  # a bare opening: the hole is all there is
+            if host is not None:
+                # the filling is drawn as a block as deep as its stored box, but no deeper than the wall it is in
+                body = box(ends[1] - ends[0], min(deep, w["width"]) or w["width"], tall)
+            filler = f.create_entity(
+                kind, GlobalId=ifcopenshell.guid.new(), Name=f"{kind[3:]} {styles.get(a['style'], '')}".strip(), ObjectType=e["type"], Tag=f"{e['handle']:X}",
+                ObjectPlacement=placement, Representation=shape(body), OverallWidth=float(a["width"]), OverallHeight=float(a["height"]),
+            )  # fmt: skip
+            if host is not None:
+                f.createIfcRelFillsElement(ifcopenshell.guid.new(), None, None, None, opening, filler)
+            describe(e, filler, {"Width": a["width"], "Height": a["height"], "Rise": a["rise"]})
+        if made:
+            f.createIfcRelContainedInSpatialStructure(ifcopenshell.guid.new(), None, None, None, made, storey)
+        for (ifc_class, style), occurrences in typed.items():
+            if style:  # the style is the type: every wall of style "Brick-X" is an occurrence of it
+                kind = ifcopenshell.api.root.create_entity(f, ifc_class=ifc_class + "Type", name=style)
+                f.createIfcRelDefinesByType(ifcopenshell.guid.new(), None, None, None, occurrences, kind)
 
     def columns(self, storey, owner) -> None:
         """Columns: closed shapes on column layers, extruded to the same assumed height as the walls."""

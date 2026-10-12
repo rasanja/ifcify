@@ -27,6 +27,7 @@ class Drawing:
         self.styles: dict[int, dict] = {}  # text style handle -> {name, font, width, oblique}
         self.materials: dict[int, str] = {}  # material handle -> name
         self.geodata: dict[int, dict] = {}  # at most one: where on Earth the drawing sits (see _geodata)
+        self.anchors: dict[int, int] = {}  # anchor handle -> the wall an Architecture door, window or opening sits in
         self.underlays: dict[int, dict] = {}  # underlay definition handle -> {file, page}
         self.images: dict[int, str] = {}  # image definition handle -> path of the picture file
         self.histories: dict[int, int] = {}  # solid history handle -> handle of its graph of modelling steps
@@ -1184,6 +1185,80 @@ def _mleader(o, r):
     return e
 
 
+def _aec_version(r) -> int:
+    """Every level of an Architecture object opens with its version; a few old ones add a flag."""
+    version = r.bs()
+    if version > 0x50:
+        raise ValueError(f"Architecture object version {version}")
+    if 0x14 <= version < 0x1E:
+        r.b()
+    return version
+
+
+def _aec(o, r) -> dict:
+    """AutoCAD Architecture walls, doors, windows and openings: where they stand and the sizes they were given.
+
+    These are objects, not linework, so the drawing holds a wall's height and width and a door's
+    width and height outright. Layout from the object enabler's own readers (AecDbEntity,
+    AecImpObj, AecImpEnt, AecImpGeo, AecImpWall, AecImpWallLinear, AecImpOpeningBase), read as far
+    as those values; the display overrides that follow are skipped.
+    """
+    version = _aec_version(r)
+    if not r.b():
+        raise ValueError("Architecture object without data")
+    kind = r.bs() if version >= 0x1E and r.b() else o.text()  # the class of the data: a number, or a name
+    _aec_version(r)  # AecImpObj
+    o.text()  # description
+    version = _aec_version(r)  # AecImpEnt
+    r.bs()
+    a = {"class": kind}
+    if version >= 0x28 and not r.rc() & 1:
+        r.b()
+        # the box around the object in its own coordinates: a corner and three edges
+        a["bounds"] = [r.bd3() for _ in range(4)]
+    if version >= 0x32 and r.b() or version >= 0x3C or version == 0x32:
+        # shortcut: classifications and per-part geometry versions are not stepped through; such an object keeps
+        # its picture only. Add them when a drawing that has them turns up to check against.
+        raise ValueError("Architecture object with classifications or a newer layout")
+    _aec_version(r)  # AecImpGeo
+    a["origin"], a["axes"] = r.bd3(), [r.bd3() for _ in range(3)]
+    if any(abs(math.hypot(*axis) - 1) > 1e-6 for axis in a["axes"]):
+        raise ValueError("Architecture object placement is not a frame")  # we are not where we think we are
+    a["anchor"] = o.handles.h(o.handle)
+    _aec_version(r)
+    if o.type == "AEC_WALL":
+        a |= {"height": r.bd(), "justification": r.bd(), "width": r.bd()}
+        a["style"] = o.handles.h(o.handle)
+        r.bd()
+        if r.b() or r.b():
+            raise ValueError("wall with roof or floor line data")  # shortcut: as above, not stepped through
+        for _ in range(5):  # body modifiers, interferences and the like, each a list
+            _aec_version(r), o.text(), _aec_version(r)
+            if r.bl():
+                raise ValueError("wall with modifiers")  # shortcut: as above
+        r.bs()
+        if kind in (569, "AecImpWallLinear"):  # a straight wall; an arc wall stores a radius instead
+            _aec_version(r)
+            a["length"] = r.bd()
+    else:
+        a |= {"width": r.bd(), "height": r.bd(), "rise": r.bd()}
+        a["style"] = o.handles.h(o.handle)
+    r.p = o.end
+    return a
+
+
+def _anchor(o: dwg.Obj) -> int:
+    """What ties a door, window or opening to its wall: the wall's handle follows the owner's."""
+    skip = _object_common(o)
+    for _ in range(1 + skip):
+        o.handles.h(o.handle)
+    o.r.p = o.end
+    return o.handles.h(o.handle)
+
+
+_AEC = ("AEC_WALL", "AEC_DOOR", "AEC_WINDOW", "AEC_OPENING")
+
+
 def _underlay(o, r):
     """PDF, DWF and DGN underlays (AcDbImpUnderlayReference): where a page of another file is laid under the drawing."""
     extrusion, point, rotation, scale = r.bd3(), r.bd3(), r.bd(), r.bd3()
@@ -1289,6 +1364,7 @@ _OBJECTS = {
     "DWFDEFINITION": ("underlays", _underlay_file),
     "DGNDEFINITION": ("underlays", _underlay_file),
     "GEODATA": ("geodata", _geodata),
+    "AEC_ANCHOR_OPENINGBASE_TO_WALL": ("anchors", _anchor),
     "ACSH_HISTORY_CLASS": ("histories", _history),
 }
 # entities with nothing to draw: block brackets, viewports, and attribute templates (the ATTRIB holds the value)
@@ -1384,6 +1460,11 @@ def load(data: bytes) -> Drawing:
                 # a type we do not decode: draw it from the picture of itself it carries, if it has one
                 entity = _entity_common(o)
                 entity["parts"] = proxy.decode(entity.pop("graphics"), release)
+                if o.type in _AEC:
+                    try:
+                        entity["aec"] = _aec(o, o.r)
+                    except (ValueError, IndexError, OverflowError):
+                        drawing.skipped[f"{o.type} sizes (layout not read; drawn from its picture)"] += 1
                 if entity["parts"]:
                     drawing.entities.append(entity)
                 else:

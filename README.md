@@ -26,6 +26,7 @@ DWG releases R14, R2000, R2004, R2007, R2010, R2013 and R2018.
 | PDF, DWF and DGN underlays | the clip outline, or the insertion point when the page is not clipped; file and page as properties |
 | Shapes | a point, with the shape file and number as properties (the symbol is not in the DWG) |
 | Other custom entities | drawn from the picture of themselves they carry, when they have one |
+| AutoCAD Architecture walls, doors, windows, openings | `IfcWall`, `IfcDoor`, `IfcWindow`, `IfcOpeningElement`, with their stored sizes and styles as types |
 | Groups | `IfcGroup` |
 | Materials on solids | `IfcMaterial` |
 | Geographic location in a projected coordinate system | `IfcMapConversion` and `IfcProjectedCRS` |
@@ -50,6 +51,13 @@ A DWG holds lines on layers, not walls and rooms. The converter adds building in
   parallel lines on wall layers become `IfcWall` with a thickness and a wall type; a gap with a door or window
   drawn in it becomes an opening in the wall, filled by an `IfcDoor` or `IfcWindow`. Closed shapes on column
   layers become `IfcColumn`. The original linework is kept alongside.
+
+**Real building objects.** A drawing made with AutoCAD Architecture can hold walls, doors, windows and
+openings as objects instead of linework. Those are converted directly: a wall with its stored height,
+width, length and position; a door or window with its stored width, height and sill; each opening cut
+into the wall it belongs to and filled by its door or window; each style (`Brick-X`, `Hinged - Double`)
+as an IFC type. Nothing about them is assumed. Where a drawing has such walls, walls are not also
+guessed from its linework. Their 2D plan symbols are kept alongside as drafting.
 
 Derived elements are an interpretation and are marked as such. Recognition depends on layer and block
 naming, so a drawing with meaningless names produces drafting and generic objects only. Import into Revit
@@ -79,6 +87,10 @@ What this means in practice:
   next section for what "measured" does and does not guarantee.
 - Only what involves the vertical direction is not: heights, volumes, and the area of a wall's face
   (its length times its assumed height). Do not take those out of the IFC.
+- AutoCAD Architecture objects are not derived and none of this applies to them: their heights and
+  widths are the drawing's own, and their properties say so (`DWG_Architecture`). One thing is still
+  simplified: a door or window is drawn as a plain block filling its opening, as deep as the object's
+  stored box but no deeper than the wall, not as a frame and a leaf.
 - Each derived element says so in its properties: `DWG_Derived.Height` or `DWG_Room.Height` reads
   "assumed ...". Elements converted from real 3D solids in the drawing are not affected; their sizes are
   the drawing's.
@@ -176,9 +188,17 @@ offices often keep them there.
 
 Not converted: custom entities that carry no picture of themselves, and paper-space layouts of drawings
 that also have a model. Embedded OLE objects are in the first group too. An underlay's page is not in
-the DWG, and neither is its size, so an unclipped underlay is only a point with the file's path. AutoCAD Architecture objects (walls, doors, windows as objects rather than
-linework) are in the first group: they are drawn from their picture and their heights and styles are
-not read yet, because no drawing containing them was available to check a decoder against. Every entity left out, for any of these
+the DWG, and neither is its size, so an unclipped underlay is only a point with the file's path. 
+
+AutoCAD Architecture objects other than straight walls, doors, windows and openings (curved walls,
+slabs, roofs, stairs, spaces, curtain walls) are drawn from their picture only; their sizes are not
+read. The same holds for a wall with body modifiers or a custom roof or floor line, and for any object
+carrying a classification: those are reported as `<TYPE> sizes (layout not read; drawn from its
+picture)`. What a wall style is built from (its layers and materials) is not read either. All of this
+was checked against one drawing, saved by AutoCAD Architecture 2007; other versions of these objects
+take the same route only if their layout matches, and fall back to the picture if not.
+
+Every entity left out, for any of these
 reasons, is counted by reason in the `X-DWG-Skipped` response header. The properties listed above as not
 carried over are dropped without a count.
 
@@ -269,6 +289,8 @@ Path("drawing.ifc").write_text(ifc_text)
 - Password-protected drawings are rejected with a 422; they are out of scope.
 - DWG R13 uses the R14 code path and is untested.
 - Solids in drawings saved as R2000 or R14 lose their rounded (filleted) faces; the rest of the solid converts.
+- A drawing's declared unit is taken at its word. A drawing that says inches but was drawn in
+  millimetres (one of the test drawings does) comes out 25.4 times too large.
 - IFC4X3 has no cone surface, so cone faces are written as surfaces of revolution. Viewer support for that varies.
 - Text is positioned, sized and given its font, but exact alignment and width factor are not carried over.
 - Arc-length and jogged-radius dimensions are placed by the block AutoCAD drew for them. Saved without
