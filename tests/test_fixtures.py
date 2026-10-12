@@ -172,7 +172,10 @@ def test_palette():
 def test_converts_to_ifc(path):
     text, skipped = convert(path.read_bytes())
     assert "FILE_SCHEMA(('IFC4X3_ADD2'))" in text
-    assert skipped == {"on a layer that is off or frozen": 2}
+    # the invisible one is a line AutoCAD keeps inside the table's block; saving to a release
+    # older than lights makes AutoCAD freeze the layer the light is on
+    old = path.stem.endswith(("_14", "2000", "2004"))
+    assert skipped == {"on a layer that is off or frozen": 2 + old, "marked invisible": 1}
     # the box and the sphere are closed solids, the region is an open sheet
     model = ifcopenshell.file.from_string(text)
     # two frustums and a cylinder, the wedge, the box; whole primitives use IFC's own solids
@@ -183,7 +186,7 @@ def test_converts_to_ifc(path):
     # CONE 350,5,0 4 8: a triangle of radius 4 and height 8
     assert [p.Coordinates for p in cone.SweptArea.OuterCurve.Points] == [(0.0, 0.0), (4.0, 0.0), (0.0, 8.0), (0.0, 0.0)]
     assert len(model.by_type("IfcSurfaceOfRevolution")) == 2  # the frustums' sides
-    assert len(model.by_type("IfcShellBasedSurfaceModel")) == 1
+    assert len(model.by_type("IfcShellBasedSurfaceModel")) == 2  # the region and the plane surface
     box = max(model.by_type("IfcAdvancedBrep"), key=lambda b: len(b.Outer.CfsFaces))
     corners = {v.VertexGeometry.Coordinates for face in box.Outer.CfsFaces for bound in face.Bounds
                for edge in bound.Bound.EdgeList for v in (edge.EdgeElement.EdgeStart, edge.EdgeElement.EdgeEnd)}  # fmt: skip
@@ -275,3 +278,71 @@ def test_record_values_follow_autocads_type_table():
     raw = b"\x01\x00\x02\x00a\x00b\x00" + b"\x5a\x00\x07\x00\x00\x00" + b"\x28\x00" + struct.pack("<d", 1.5)
     raw += b"\x4a\x01" + (0x1F).to_bytes(8, "little") + b"\x18\x01\x01"
     assert entities._values(raw, True) == [(1, "ab"), (90, 7), (40, 1.5), (330, 0x1F), (280, 1)]
+
+
+@pytest.mark.parametrize("path", RELEASES, ids=lambda p: p.stem)
+def test_entities_that_point_at_other_data(path):
+    """As drawn by tools/entities.scr: values must come out as typed there, in every release."""
+    drawing = entities.load(path.read_bytes())
+    one = {kind: next(e for e in drawing.entities if e["type"] == kind) for kind in ("WIPEOUT", "IMAGE", "HELIX", "MESH", "ACAD_TABLE", "LIGHT", "SHAPE")}
+    assert one["WIPEOUT"]["points"] == [(0.0, 160.0, 0.0), (10.0, 160.0, 0.0), (10.0, 170.0, 0.0), (0.0, 170.0, 0.0)]
+    assert sorted(one["IMAGE"]["points"]) == [(60.0, 230.0, 0.0), (60.0, 240.0, 0.0), (70.0, 230.0, 0.0), (70.0, 240.0, 0.0)]
+    assert drawing.images[one["IMAGE"]["definition"]] == "/tmp/dwg2ifc_fixture.png"
+    assert one["HELIX"]["stored"] == {"Radius": 5.0, "Turns": 3.0, "TurnHeight": pytest.approx(10 / 3)}
+    low, high = (tuple(f(axis) for axis in zip(*one["MESH"]["points"])) for f in (min, max))
+    assert (low, high) == ((40.0, 230.0, 0.0), (50.0, 240.0, 5.0))
+    assert len(one["MESH"]["faces"]) == 54 and all(len(face) == 4 for face in one["MESH"]["faces"])
+    assert drawing.blocks[one["ACAD_TABLE"]["block"]]["name"].startswith("*T") and one["ACAD_TABLE"]["point"] == (0.0, 270.0, 0.0)
+    assert (one["LIGHT"]["name"], one["LIGHT"]["kind"], one["LIGHT"]["point"]) == ("Pointlight1", "point", (80.0, 230.0, 5.0))
+    assert (one["SHAPE"]["point"], one["SHAPE"]["size"]) == ((120.0, 230.0, 0.0), 2.0)
+    assert drawing.styles[one["SHAPE"]["style"]]["font"].lower() == "ltypeshp.shx"
+
+    names = {handle: name for entries in drawing.dictionaries.values() for name, handle in entries.items()}
+    (handle, group), = drawing.groups.items()
+    assert (names[handle], group["description"]) == ("PAIR", "A line and a circle")
+    assert [e["type"] for e in drawing.entities if e["handle"] in group["members"]] == ["CIRCLE"]  # "L" selected the last one
+    styled = next(e for e in drawing.entities if e.get("text") == "Styled text")
+    notes = drawing.styles[styled["style"]]
+    assert (notes["name"], notes["font"].lower().removesuffix(".ttf")) == ("NOTES", "arial")
+    assert math.degrees(notes["oblique"]) == pytest.approx(15)
+
+    model = ifcopenshell.file.from_string(convert(path.read_bytes())[0])
+    assert [g.Name for g in model.by_type("IfcGroup")] == ["PAIR"]
+    if not path.stem.endswith(("_14", "2000", "2004")):  # saved to those, the light's layer is frozen
+        assert [light.Name for light in model.by_type("IfcLightFixture")] == ["Pointlight1"]
+    sets = {p.Name: {v.Name: v.NominalValue.wrappedValue for v in p.HasProperties} for p in model.by_type("IfcPropertySet")}
+    assert sets["DWG_Image"] == {"File": "/tmp/dwg2ifc_fixture.png"} and sets["DWG_Shape"]["File"].lower() == "ltypeshp.shx"
+    assert any(s.TextFontStyle.FontStyle == "oblique" for s in model.by_type("IfcTextStyle"))
+
+
+@pytest.mark.parametrize("path", [p for p in RELEASES if p.stem[-4:] in ("2007", "2010", "2013", "2018")], ids=lambda p: p.stem)
+def test_solids_keep_the_sizes_they_were_made_with(path):
+    """BOX 10x8x6, SPHERE r4, three CONEs r4 h8 (top radius 0, 2, 6), CYLINDER r3 h7, TORUS 6/2, WEDGE 10x8x6."""
+    drawing = entities.load(path.read_bytes())
+    stored = [e["stored"] for e in drawing.entities if e["type"] == "3DSOLID"]
+    assert stored == [
+        {"Primitive": "Box", "Length": 10.0, "Width": 8.0, "Height": 6.0},
+        {"Primitive": "Sphere", "Radius": 4.0},
+        {"Primitive": "Cone", "Height": 8.0, "BaseRadius": 4.0, "BaseMinorRadius": 4.0, "TopRadius": 0.0},
+        {"Primitive": "Cone", "Height": 8.0, "BaseRadius": 4.0, "BaseMinorRadius": 4.0, "TopRadius": 2.0},
+        {"Primitive": "Cone", "Height": 8.0, "BaseRadius": 4.0, "BaseMinorRadius": 4.0, "TopRadius": 6.0},
+        {"Primitive": "Cylinder", "Height": 7.0, "BaseRadius": 3.0, "BaseMinorRadius": 3.0, "TopRadius": 3.0},
+        {"Primitive": "Torus", "MajorRadius": 6.0, "MinorRadius": 2.0},
+        {"Primitive": "Wedge", "Length": 10.0, "Width": 8.0, "Height": 6.0},
+    ]
+    model = ifcopenshell.file.from_string(convert(path.read_bytes())[0])
+    box = next(p for p in model.by_type("IfcBuildingElementProxy") if ifcopenshell.util.element.get_psets(p).get("DWG_Stored", {}).get("Primitive") == "Box")
+    assert ifcopenshell.util.element.get_psets(box)["DWG_Stored"]["Height"] == "6.0"
+
+
+def test_stored_geographic_location_becomes_a_map_conversion():
+    geo = {"kind": "projected grid", "system": '<Alias id="26911" type="CoordinateSystem">', "design": (100.0, 200.0, 0.0),
+           "reference": (500000.0, 4000000.0, 10.0), "scale": 0.5, "north": (0.0, 1.0)}  # fmt: skip
+    assert ifc._map_position(geo, (0.0, 0.0, 0.0)) == {
+        "Name": "EPSG:26911", "Eastings": 499950.0, "Northings": 3999900.0, "OrthogonalHeight": 10.0,
+        "XAxisAbscissa": 1.0, "XAxisOrdinate": 0.0, "Scale": 0.5,
+    }  # fmt: skip
+    # drawing north pointing along +x: the drawing's x axis is map north, its y axis map west
+    turned = ifc._map_position(geo | {"north": (1.0, 0.0), "design": (0.0, 0.0, 0.0)}, (0.0, 10.0, 0.0))
+    assert (turned["Eastings"], turned["Northings"], turned["XAxisAbscissa"], turned["XAxisOrdinate"]) == (499995.0, 4000000.0, 0.0, 1.0)
+    assert ifc._map_position(geo | {"kind": "local grid"}, (0.0, 0.0, 0.0)) == {}

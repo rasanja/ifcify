@@ -86,10 +86,17 @@ def test_conference_room_solids_become_breps():
     model = ifcopenshell.file.from_string(text)
     # 327 ACIS faces; the 6 on self-intersecting tori have no IFC surface and are reported instead
     assert len(model.by_type("IfcAdvancedFace")) == 327
-    assert skipped == {"LIGHT": 8}
+    assert skipped == {}
+    lights = model.by_type("IfcLightFixture")
+    # six point lights, and six inserts of the block "Fluorescent Fixture" (which holds two lights of its own)
+    assert len(lights) == 12 and {light.Name for light in lights} >= {"Pointlight1", "Pointlight6"}
+    # sizes AutoCAD keeps for solids made in one step, and the material given to faces in a solid's history
+    stored = [ifcopenshell.util.element.get_psets(p).get("DWG_Stored", {}) for p in model.by_type("IfcElement")]
+    assert sum(1 for s in stored if s.get("Primitive") == "Cylinder" and float(s["BaseRadius"]) == 3.298655103182199) == 6
+    assert [m.Name for m in model.by_type("IfcMaterial")] == ["Blue"]
     assert len(model.by_type("IfcBuildingElementProxy")) == 32  # 30 solids, 2 surfaces
     # the block "Fluorescent Fixture" is a type, and its six inserts are light fixtures of that type
-    fixtures = model.by_type("IfcLightFixture")
+    fixtures = [light for light in lights if light.ObjectType == "INSERT"]
     kind = model.by_type("IfcLightFixtureType")[0]
     assert len(fixtures) == 6 and kind.Name == "Fluorescent Fixture"
     assert set(model.by_type("IfcRelDefinesByType")[0].RelatedObjects) == set(fixtures)

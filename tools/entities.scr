@@ -2,6 +2,7 @@
 ; so a step AutoCAD rejects is reported and skipped without losing the others.
 ; In a script every space and every newline is an Enter; text prompts take the rest of the line.
 ; The console has no screen, so objects are selected with ALL or L (last), never by picking a point.
+; DIMARC and DIMJOGGED accept only a pick, so arc-length and jogged dimensions are not in the fixtures.
 ;;; block
 INSUNITS 4
 -ATTDEF
@@ -147,3 +148,31 @@ CIRCLE 25,190 3
 CLAYER 0
 -LAYER OFF OFFLAYER F FROZENLAYER
 
+;;; style
+-STYLE NOTES Arial 0 1.2 15 N N
+TEXT 0,250 2 0 Styled text
+TEXTSTYLE Standard
+;;; group
+LINE 0,230 10,230
+
+CIRCLE 5,235 2
+-GROUP C PAIR A line and a circle
+L
+
+;;; helix
+HELIX 20,230,0 5 5 T 3 10
+;;; subd
+MESH B 40,230,0 50,240,0 5
+;;; image
+-IMAGE A /tmp/dwg2ifc_fixture.png 60,230 10 0
+;;; table
+-TABLE 3 2 0,270
+;;; mleader
+MLEADER 0,300 10,305 Leader text
+;;; planesurf
+PLANESURF 100,230 110,240
+;;; light
+POINTLIGHT 80,230,5 X
+;;; shape
+LOAD ltypeshp.shx
+SHAPE BOX 120,230 2 0

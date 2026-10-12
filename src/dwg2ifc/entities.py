@@ -3,7 +3,7 @@
 import math
 import re
 import struct
-from collections import Counter
+from collections import Counter, defaultdict
 
 from dwg2ifc import acis, datastore, dwg, header, proxy
 from dwg2ifc.dwg import since
@@ -25,6 +25,11 @@ class Drawing:
         self.xrecords: dict[int, list] = {}  # handle -> [(DXF group code, value)]
         self.groups: dict[int, dict] = {}  # handle -> {description, members}; its name is its key in a dictionary
         self.styles: dict[int, dict] = {}  # text style handle -> {name, font, width, oblique}
+        self.materials: dict[int, str] = {}  # material handle -> name
+        self.geodata: dict[int, dict] = {}  # at most one: where on Earth the drawing sits (see _geodata)
+        self.images: dict[int, str] = {}  # image definition handle -> path of the picture file
+        self.histories: dict[int, int] = {}  # solid history handle -> handle of its graph of modelling steps
+        self.steps: dict[int, dict] = {}  # modelling step handle -> {owner (the graph), kind, sizes}
         self.entities: list[dict] = []  # each has type, handle, owner (block header handle), layer
         self.skipped: Counter[str] = Counter()  # entity types we could not convert
 
@@ -167,10 +172,11 @@ def _layer(o: dwg.Obj) -> dict:
         if color > 0x7FFF:  # stored negative when the layer is off
             color, off = 0x10000 - color, True
     # handles: owner, reactors and dictionary, xref block, plot style (R2000+), material (R2007+), then the linetype
-    for _ in range(2 + skip + since(o.release, "R2000") + since(o.release, "R2007")):
+    for _ in range(2 + skip + since(o.release, "R2000")):
         o.handles.h(o.handle)
+    material = o.handles.h(o.handle) if since(o.release, "R2007") else 0
     return {"name": name, "color": color or 7, "lineweight": lineweight, "off": off, "frozen": frozen, "locked": locked,
-            "linetype": o.handles.h(o.handle)}  # fmt: skip
+            "material": material, "linetype": o.handles.h(o.handle)}  # fmt: skip
 
 
 def _field(o: dwg.Obj) -> list:
@@ -326,6 +332,100 @@ def _style(o: dwg.Obj) -> dict:
     return {"name": name, "font": font, "faces": faces, "width": width, "oblique": oblique}
 
 
+def _colour(o: dwg.Obj) -> None:
+    """Steps over a colour stored inside an object (AcCmColor::dwgIn)."""
+    r = o.r
+    r.bs()
+    if since(o.release, "R2004"):
+        r.bl()
+        names = r.rc()
+        for bit in (1, 2):
+            if names & bit:
+                o.text()
+
+
+def _material(o: dwg.Obj) -> str:
+    """A material's name; its colours and texture maps are rendering settings and are not read."""
+    _object_common(o)
+    name = o.text()
+    o.r.p = o.end
+    return name
+
+
+def _geodata(o: dwg.Obj) -> dict:
+    """GEODATA (AcDbImpGeoData::dwgInFields): the drawing point that sits at a known point of a coordinate system."""
+    _object_common(o)
+    r = o.r
+    if r.bl() < 2:
+        raise ValueError("geographic location in the AutoCAD 2009 layout")  # shortcut: only the layout since 2010 is read
+    kind = {1: "local grid", 2: "projected grid", 3: "geographic"}.get(r.bl(), "unknown")
+    geo = {"kind": kind, "design": r.bd3(), "reference": r.bd3(), "scale": r.bd()}
+    r.bl(), r.bd(), r.bl()  # horizontal units, vertical scale and units
+    r.bd3()  # up direction
+    geo["north"] = r.rd2()
+    r.bl(), r.bd(), r.b(), r.bd(), r.bd()  # scale estimate and sea-level correction
+    geo["system"] = o.text()  # the coordinate system, described in XML
+    r.p = o.end  # observation notes and the mesh used to warp map images
+    return geo
+
+
+def _image_file(o: dwg.Obj) -> str:
+    """IMAGEDEF: the picture file an IMAGE entity shows. The drawing holds the path, not the picture."""
+    _object_common(o)
+    o.r.bl(), o.r.rd2()  # class version, size in pixels
+    path = o.text()
+    o.r.b(), o.r.rc(), o.r.rd2()  # loaded, resolution unit, size of a pixel
+    return path
+
+
+def _history(o: dwg.Obj) -> int:
+    """A solid's modelling history (AcDbImpShHistory::dwgInFields): it owns a graph of steps."""
+    skip = _object_common(o)
+    r = o.r
+    r.bl(), r.bl(), r.bl(), r.b(), r.b()  # version, record-history and show-history settings
+    for _ in range(1 + skip):
+        o.handles.h(o.handle)
+    return o.handles.h(o.handle)
+
+
+# the sizes a primitive solid is created from, in file order (AcDbImpSh<Kind>::dwgInFields)
+_PRIMITIVES = {
+    "ACSH_BOX_CLASS": ("Length", "Width", "Height"),
+    "ACSH_WEDGE_CLASS": ("Length", "Width", "Height"),
+    "ACSH_SPHERE_CLASS": ("Radius",),
+    "ACSH_CYLINDER_CLASS": ("Height", "BaseRadius", "BaseMinorRadius", "TopRadius"),
+    "ACSH_CONE_CLASS": ("Height", "BaseRadius", "BaseMinorRadius", "TopRadius"),
+    "ACSH_TORUS_CLASS": ("MajorRadius", "MinorRadius"),
+}
+
+
+def _step(o: dwg.Obj) -> dict:
+    """One step of a solid's history. A primitive keeps the sizes the user gave it, so they need not be measured."""
+    skip = _object_common(o)
+    r = o.r
+    step = {"owner": o.handles.h(o.handle), "kind": o.type[5:-6].title(), "sizes": {}}
+    if o.type == "ACSH_SUBENT_MATERIAL_CLASS":  # a material given to some faces: the step's one handle of its own
+        for _ in range(skip):
+            o.handles.h(o.handle)
+        step["material"] = o.handles.h(o.handle)
+    if o.type not in _PRIMITIVES:
+        r.p = o.end  # fillets, booleans, sweeps: counted as steps, their settings are not read
+        return step
+    if r.bl() == 0xFFFFFFFF:  # AcDbEvalExpr: a newer layout carries a version and a last value
+        r.bl(), r.bl()
+        kind = _VALUE_TYPE.get(struct.unpack("<h", r.bs().to_bytes(2, "little"))[0])
+        {"real": r.bd, "int32": r.bl, "int16": r.bs, "int8": r.bs, "point": r.bd3, "text": o.text}.get(kind, int)()
+        r.bl()
+    r.bl(), r.bl()  # AcDbShHistoryNode: version
+    for _ in range(16):
+        r.bd()  # where the primitive sits, as a 4x4 matrix
+    _colour(o)
+    r.bl()  # step number
+    r.bl(), r.bl()  # the primitive's own version
+    step["sizes"] = {name: r.bd() for name in _PRIMITIVES[o.type]}
+    return step
+
+
 def _block_control(o: dwg.Obj) -> dict:
     """The block table: its last two handles name model space and the active paper space."""
     skip = _object_common(o)
@@ -421,9 +521,10 @@ def _entity_common(o: dwg.Obj) -> dict:
         e["layer"] = hr.h(o.handle)
         if ltype == 3:
             e["linetype"] = hr.h(o.handle)
-        for present in (material == 3, plotstyle == 3):
-            if present:
-                hr.h()
+        if material == 3:
+            e["material"] = hr.h(o.handle)  # otherwise the layer's
+        if plotstyle == 3:
+            hr.h()
     for _ in range(visual_styles):
         hr.h()
     return e
@@ -623,7 +724,7 @@ def _dimension(o, r):
          "text_point": (*text_point, elevation), "angle": 0.0}  # fmt: skip
     if o.type == "DIMENSION_ANG2LN":
         r.rd2()  # arc point
-    e["defs"] = {group: r.bd3() for group in _DIMENSION_POINTS[o.type]}
+    e["defs"] = {group: r.bd3() for group in _DIMENSION_POINTS.get(o.type, ())}
     if o.type == "DIMENSION_ORDINATE":
         r.rc()  # x or y ordinate
     elif o.type in ("DIMENSION_LINEAR", "DIMENSION_ALIGNED"):
@@ -632,6 +733,8 @@ def _dimension(o, r):
             e["angle"] = r.bd()
     elif o.type in ("DIMENSION_RADIUS", "DIMENSION_DIAMETER"):
         r.bd()  # leader length
+    else:
+        r.p = o.end  # arc-length and jogged dimensions: their points are not read, the block shows them as drawn
     e["style"] = o.handles.h(o.handle)
     e["block"] = o.handles.h(o.handle)
     return e
@@ -871,7 +974,11 @@ def _acis(o, r):
     else:  # an unframed file: binary ends at its end marker, text is cut by the parser
         data = r.raw((o.end - r.p) // 8)
     r.p = o.end
-    return {"bodies": acis.bodies(data) if data else None}
+    # the handles left are the materials of its faces and, for a solid, its history; load() tells them apart
+    links = []
+    while since(o.release, "R2007") and o.handles.p + 8 <= o.stop:
+        links.append(o.handles.h(o.handle))
+    return {"bodies": acis.bodies(data) if data else None, "links": links}
 
 
 def _arc_vertices(center, radius, start, sweep):
@@ -960,6 +1067,81 @@ def _hatch(o, r):
     return e
 
 
+def _image(o, r):
+    """IMAGE and WIPEOUT: a frame for a picture (or a blank mask), given as a clip outline in pixel coordinates."""
+    r.bl()  # class version
+    origin, u, v = r.bd3(), r.bd3(), r.bd3()  # lower-left corner, and the size of one pixel along each side
+    _, tall = r.rd2()
+    r.bs(), r.b(), r.rc(), r.rc(), r.rc()  # display flags, clipping on, brightness, contrast, fade
+    if since(o.release, "R2010"):
+        r.b()  # clip inverted
+    if r.bs() == 1:  # a rectangle by two corners
+        (x1, y1), (x2, y2) = r.rd2(), r.rd2()
+        outline = [(x1, y1), (x2, y1), (x2, y2), (x1, y2)]
+    else:
+        outline = [r.rd2() for _ in range(r.bl())]
+        outline = outline[:-1] if len(outline) > 1 and outline[0] == outline[-1] else outline
+    # pixel rows count downwards from the top, and a pixel's centre is its coordinate
+    points = [tuple(origin[i] + u[i] * (x + 0.5) + v[i] * (tall - y - 0.5) for i in range(3)) for x, y in outline]
+    return {"points": points, "closed": True, "definition": o.handles.h(o.handle)}
+
+
+def _helix(o, r):
+    """A spline AutoCAD keeps in step with the radius, turns and pitch stored after it (AcDbImpHelix)."""
+    e = _spline(o, r)
+    r.bl(), r.bl()  # version
+    r.bd3(), r.bd3(), r.bd3()  # axis base point, start point, axis direction
+    e["stored"] = {"Radius": r.bd(), "Turns": r.bd(), "TurnHeight": r.bd()}
+    r.b(), r.rc()  # handedness, which of the three sizes follows from the others
+    return e
+
+
+def _mesh(o, r):
+    """MESH, a subdivision surface (AcDbImpSubDMesh): the cage of points and faces it is smoothed from."""
+    r.bs(), r.b()  # version, blend creases
+    level = r.bl()
+    points = [r.bd3() for _ in range(r.bl())]
+    listed = [r.bl() for _ in range(r.bl())]  # per face: a corner count, then that many point numbers
+    faces, i = [], 0
+    while i < len(listed):
+        faces.append([n + 1 for n in listed[i + 1 : i + 1 + listed[i]]])
+        i += 1 + listed[i]
+    r.p = o.end  # edges, creases and per-face overrides are not used
+    # shortcut: the cage is written as it is, so a mesh with smoothing levels comes out faceted
+    return {"points": points, "faces": faces, "stored": {"SmoothingLevel": level}}
+
+
+def _table(o, r):
+    """ACAD_TABLE: AutoCAD keeps the table as drawn in a block, and the table is an insert of it (AcDbImpTable)."""
+    e = _insert(o, r)
+    r.p = o.end  # the cell contents and styles the block was drawn from
+    return e
+
+
+def _shape(o, r):
+    """SHAPE (AcDbImpShape): a symbol from a compiled shape file, which the drawing names but does not contain."""
+    e = {"point": r.bd3(), "size": r.bd(), "rotation": r.bd()}
+    r.bd(), r.bd()  # width factor, oblique angle
+    _ = r.bd()  # thickness
+    e["number"] = r.bs()
+    e["extrusion"] = r.bd3()
+    e["style"] = o.handles.h(o.handle)
+    return e
+
+
+def _light(o, r):
+    """A light source (AcDbImpLight): placed as a light fixture, since IFC has no lamp without a fitting."""
+    r.bl()  # version
+    name = o.text()
+    kind = {1: "distant", 2: "point", 3: "spot"}.get(r.bl(), "web")
+    on = bool(r.b())
+    _colour(o)
+    r.b()  # plot the glyph
+    e = {"name": name, "kind": kind, "on": on, "intensity": r.bd(), "point": r.bd3(), "target": r.bd3()}
+    r.p = o.end  # attenuation, cone angles and shadow settings
+    return e
+
+
 _DECODERS = {
     "LINE": _line,
     "CIRCLE": _circle,
@@ -991,6 +1173,15 @@ _DECODERS = {
     "XLINE": _ray,
     "MLINE": _mline,
     "HATCH": _hatch,
+    "IMAGE": _image,
+    "WIPEOUT": _image,
+    "HELIX": _helix,
+    "MESH": _mesh,
+    "ACAD_TABLE": _table,
+    "LIGHT": _light,
+    "SHAPE": _shape,
+    "ARC_DIMENSION": _dimension,
+    "LARGE_RADIAL_DIMENSION": _dimension,
 } | {
     name: _acis
     for name in ("3DSOLID", "REGION", "BODY", "SURFACE", "PLANESURFACE", "EXTRUDEDSURFACE", "REVOLVEDSURFACE",
@@ -1002,6 +1193,10 @@ _OBJECTS = {
     "XRECORD": ("xrecords", _xrecord),
     "GROUP": ("groups", _group),
     "STYLE": ("styles", _style),
+    "IMAGEDEF": ("images", _image_file),
+    "MATERIAL": ("materials", _material),
+    "GEODATA": ("geodata", _geodata),
+    "ACSH_HISTORY_CLASS": ("histories", _history),
 }
 # entities with nothing to draw: block brackets, viewports, and attribute templates (the ATTRIB holds the value)
 _STRUCTURAL = {"BLOCK", "ENDBLK", "SEQEND", "VIEWPORT", "ATTDEF"}
@@ -1062,6 +1257,10 @@ def load(data: bytes) -> Drawing:
                     pass  # drawn as a solid line
             elif o.type == "APPID":
                 drawing.apps[o.handle] = _table_name(o)
+            elif o.type.startswith("ACSH_") and o.type != "ACSH_HISTORY_CLASS":
+                drawing.steps[o.handle] = _step(o)
+                if o.r.p != o.end:
+                    drawing.steps[o.handle]["sizes"] = {}  # still a step of its solid, with sizes we will not vouch for
             elif o.type in _OBJECTS or (o.type == "ACDBDICTIONARYWDFLT" and since(release, "R2000")):
                 store, decode = _OBJECTS.get(o.type, _OBJECTS["DICTIONARY"])
                 getattr(drawing, store)[o.handle] = decode(o)
@@ -1073,8 +1272,10 @@ def load(data: bytes) -> Drawing:
                 drawing.blocks[o.handle] = _block_header(o)
             elif o.type in _DECODERS:
                 entity = _entity_common(o)
-                del entity["graphics"]
+                graphics = entity.pop("graphics")
                 entity |= _DECODERS[o.type](o, o.r)
+                if "block" in entity and graphics:
+                    entity["picture"] = graphics  # drawn from this if the block turns out to be missing
                 if o.r.p != o.end:
                     raise ValueError(f"{o.type} {o.handle:X} decoded to bit {o.r.p}, expected {o.end}")
                 if o.thickness:
@@ -1093,6 +1294,20 @@ def load(data: bytes) -> Drawing:
 
     for style in drawing.styles.values():
         style["font"] = next((face for app, face in style.pop("faces") if face and drawing.apps.get(app) == "ACAD"), style["font"])
+    # a solid made in one step has that primitive's sizes; after more steps they no longer describe it
+    steps = defaultdict(list)
+    for step in drawing.steps.values():
+        steps[step["owner"]].append(step)
+    for e in drawing.entities:
+        links = e.pop("links", ())
+        made = steps.get(next((drawing.histories[h] for h in links if h in drawing.histories), None), ())
+        links = [*links, *(step.get("material") for step in made)]
+        faces = list(dict.fromkeys(drawing.materials[h] for h in links if h in drawing.materials))
+        if faces:
+            e["materials"] = faces
+        made = [step for step in made if not step["kind"].startswith("Subent")]  # colours and materials shape nothing
+        if len(made) == 1 and made[0]["sizes"]:
+            e["stored"] = {"Primitive": made[0]["kind"]} | made[0]["sizes"]
     _attach_vertices(drawing)
     if any(e.get("bodies", 0) is None for e in drawing.entities):  # R2013+ keeps ACIS data outside the entity
         store = datastore.records(secs.get("AcDb:AcDsPrototype_1b", b""))

@@ -7,6 +7,8 @@ work=$(mktemp -d)
 settings=$'FILEDIA 0\nCMDDIA 0\nOSMODE 0\nATTDIA 0\nATTREQ 1'
 current=""
 n=0
+# a 2x2 picture for the IMAGE step; the drawing records this path
+base64 -d <<< iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGP4z8DwnwEI/jMw/GdgAAAb9AP9Zr0MXQAAAABJRU5ErkJggg== > /tmp/dwg2ifc_fixture.png
 # split the script into one file per step
 awk -v dir="$work" '/^;;; /{name=$2; next} /^;/{next} name{print > (dir "/step_" name ".txt")}' tools/entities.scr
 for name in $(grep '^;;; ' tools/entities.scr | cut -d' ' -f2); do

@@ -18,7 +18,7 @@ import ifcopenshell.api.root
 import ifcopenshell.api.unit
 import ifcopenshell.guid
 
-from dwg2ifc import derive
+from dwg2ifc import derive, proxy
 from dwg2ifc.classify import classify, is_plan
 from dwg2ifc.entities import Drawing, bspline_points, fit_spline
 
@@ -76,6 +76,8 @@ _PLACED = {"IfcDoor", "IfcWindow", "IfcStair", "IfcColumn", "IfcSanitaryTerminal
 # DWG entity type -> _Builder method, where the name is not simply the lowercased type
 _METHODS = {"POLYLINE_2D": "lwpolyline", "ATTRIB": "text", "TRACE": "solid", "3DFACE": "face3d",
             "3DSOLID": "acis", "REGION": "acis", "BODY": "acis"}  # fmt: skip
+_METHODS |= {"IMAGE": "polyline_3d", "WIPEOUT": "polyline_3d", "HELIX": "spline", "MESH": "polyline_pface", "ACAD_TABLE": "insert",
+             "ARC_DIMENSION": "dimension", "LARGE_RADIAL_DIMENSION": "dimension", "LIGHT": "point", "SHAPE": "point"}  # fmt: skip
 _METHODS |= dict.fromkeys(("SURFACE", "PLANESURFACE", "EXTRUDEDSURFACE", "REVOLVEDSURFACE", "SWEPTSURFACE",
                            "LOFTEDSURFACE", "NURBSURFACE"), "acis")  # fmt: skip
 # representation types that are model geometry rather than drafting
@@ -164,6 +166,27 @@ def _far_origin(entities: list[dict], metres: float) -> tuple[float, float, floa
     return origin if math.hypot(*origin) * metres > _FAR else (0.0, 0.0, 0.0)
 
 
+def _map_position(geo: dict, shift) -> dict:
+    """IfcMapConversion values from a drawing's stored geographic location, for a projected coordinate system."""
+    if geo.get("kind") != "projected grid" or not geo.get("system"):
+        return {}  # shortcut: latitude/longitude locations are not converted, that takes a map projection
+    code = re.search(r'<Alias id="(\d+)" type="CoordinateSystem">', geo["system"])
+    named = re.search(r'<ProjectedCoordinateSystem id="([^"]+)"', geo["system"])
+    nx, ny = _unit((*geo["north"], 0.0))[:2]
+    dx, dy, dz = (shift[i] - geo["design"][i] for i in range(3))
+    scale = geo["scale"] or 1.0
+    # a drawing vector's map coordinates are its parts along the drawing's east and north directions
+    return {
+        "Name": f"EPSG:{code.group(1)}" if code else named.group(1) if named else "from the drawing",
+        "Eastings": geo["reference"][0] + scale * (dx * ny - dy * nx),
+        "Northings": geo["reference"][1] + scale * (dx * nx + dy * ny),
+        "OrthogonalHeight": geo["reference"][2] + scale * dz,
+        "XAxisAbscissa": ny,
+        "XAxisOrdinate": nx,
+        "Scale": scale,
+    }
+
+
 def _kind(item) -> str:
     """The IfcShapeRepresentation type an item belongs in."""
     for ifc_class, kind in (
@@ -203,6 +226,7 @@ class _Builder:
         self.values: dict[tuple, object] = {}  # (name, value) -> shared IfcPropertySingleValue
         self.types: dict[tuple, object] = {}  # (block handle, IFC class) -> its IfcTypeProduct
         self.typed = defaultdict(list)  # type entity -> occurrences
+        self.with_material = defaultdict(list)  # material names -> elements made of them
         self.by_handle: dict[int, object] = {}  # DWG handle -> the product written for it
         self.described = defaultdict(list)  # (layer, entity type, colour) -> products with those properties
         self.attributes = defaultdict(list)  # insert handle -> [(tag, value)] from its block attributes
@@ -269,6 +293,13 @@ class _Builder:
                 projected_crs={"Name": "DWG world coordinates", "MapUnit": length},
                 coordinate_operation={"Eastings": east, "Northings": north, "OrthogonalHeight": height},
             )
+        located = _map_position(next(iter(drawing.geodata.values()), {}), self.origin_shift)
+        if located:  # the drawing says where on Earth it is: that replaces the plain offset above
+            if not any(self.origin_shift):
+                ifcopenshell.api.georeference.add_georeferencing(f)
+            name = located.pop("Name")
+            # shortcut: the map unit is left to mean the project's length unit; Scale converts when they differ
+            ifcopenshell.api.georeference.edit_georeferencing(f, projected_crs={"Name": name, "MapUnit": None}, coordinate_operation=located)
         # placements and containment are written directly: the API's assign_container costs 15 ms per product
         for space_name, handle in spaces or [("Model Space", None)]:
             storey = ifcopenshell.api.root.create_entity(f, ifc_class="IfcBuildingStorey", name=space_name)
@@ -301,6 +332,11 @@ class _Builder:
                 self.walls(storey, handle)
                 self.columns(storey, handle)
         self.groups()
+        made = {}
+        for names, made_of in self.with_material.items():
+            listed = [made.setdefault(name, f.createIfcMaterial(name, None, None)) for name in names]
+            material = listed[0] if len(listed) == 1 else f.createIfcMaterialList(listed)  # several: one per face
+            f.createIfcRelAssociatesMaterial(ifcopenshell.guid.new(), None, None, None, made_of, material)
         for kind, occurrences in self.typed.items():
             f.createIfcRelDefinesByType(ifcopenshell.guid.new(), None, None, None, occurrences, kind)
         for (layer, kind, colour, linetype), described in self.described.items():
@@ -339,12 +375,26 @@ class _Builder:
         if tags:
             self.property_set("DWG_Attributes", tags, [product])
         stored = {f"Stored{name}": value for name, value, _ in self.d.fields.get(e["handle"], ())}
+        stored |= e.get("stored", {})
         if e.get("thickness"):
             stored["Thickness"] = e["thickness"]
         if e.get("width", 0) > 0:
             stored["Width"] = e["width"]
         if stored:  # values the drawing holds for this entity that its shape alone does not show
             self.property_set("DWG_Stored", stored, [product])
+        # a solid's faces name their materials; otherwise the entity's own, or else its layer's
+        materials = e.get("materials") or [self.d.materials.get(e.get("material") or layer.get("material"), "")]
+        materials = [m for m in materials if m and m not in ("ByLayer", "ByBlock", "Global")]
+        if product.is_a("IfcElement") and materials:
+            self.with_material[tuple(materials)].append(product)
+        if e["type"] == "LIGHT":
+            product.Name = e["name"] or product.Name
+            self.property_set("DWG_Light", {"Kind": e["kind"], "On": e["on"], "Intensity": e["intensity"], "Target": e["target"]}, [product])
+        if e["type"] == "SHAPE":  # shortcut: placed as a point; drawing the symbol needs the shape file itself
+            file = self.d.styles.get(e["style"], {}).get("font", "")
+            self.property_set("DWG_Shape", {"File": file, "Number": e["number"], "Size": e["size"], "Rotation": e["rotation"]}, [product])
+        if e.get("definition") in self.d.images:
+            self.property_set("DWG_Image", {"File": self.d.images[e["definition"]]}, [product])
         self.xdata(e, product)
         self.records(e, product)
 
@@ -584,6 +634,8 @@ class _Builder:
         """Solids and meshes are things in the model, and so is a block whose name or layer says what it is.
         Everything else is drafting."""
         layer = self.d.layers.get(e["layer"], {}).get("name", "")
+        if e["type"] == "LIGHT":
+            return "IfcLightFixture"
         if any(_kind(i) in _BODY_KINDS or self.is_body(i) for i in items):
             return classify(self.d.blocks.get(e.get("block"), {}).get("name", ""), layer) or "IfcBuildingElementProxy"
         if e["type"] in ("INSERT", "MINSERT"):
@@ -659,6 +711,8 @@ class _Builder:
         finally:
             self.shift = outer
         found = [] if found is None else found if isinstance(found, list) else [found]
+        if not found and e.get("picture"):  # its block is missing: draw the picture of itself the entity carries
+            return self.items({k: v for k, v in e.items() if k != "picture"} | {"parts": proxy.decode(e["picture"], self.d.release)}, parents)
         layer = self.d.layers.get(e["layer"], {})
         self.layer_items[layer.get("name", "0")] += found
         self.style(e, layer, found)
