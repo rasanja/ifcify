@@ -457,29 +457,24 @@ class _Builder:
         shift = self.origin_shift
         made = []
         for room in derive.spaces(self.d, owner, 0.25 / self.metres**2):
-            outline = _distinct([(x - shift[0], y - shift[1]) for x, y in room["outline"]])
-            if len(outline) < 3:
+            # the outline as drawn, arcs included, in its own plane; the room is placed at the outline's elevation
+            curve = self.polycurve([(x - shift[0], y - shift[1]) for x, y in room["points"]], room["bulges"], True, 0.0, _Z, flat=True)
+            if curve is None or len(room["outline"]) < 3:
                 continue
-            if derive.area(outline) < 0:
-                outline.reverse()
             height, source = self.tall(room["height"])
-            floor = float(room["elevation"] - shift[2])
+            floor = f.createIfcAxis2Placement3D(f.createIfcCartesianPoint((0.0, 0.0, float(room["elevation"] - shift[2]))))
             if height:
-                corners = [f.createIfcCartesianPoint(p) for p in outline]
-                profile = f.createIfcArbitraryClosedProfileDef("AREA", None, f.createIfcPolyline([*corners, corners[0]]))
-                base = self.f.createIfcAxis2Placement3D(f.createIfcCartesianPoint((0.0, 0.0, floor)))
-                solid = f.createIfcExtrudedAreaSolid(profile, base, self.direction(_Z), height)
+                solid = f.createIfcExtrudedAreaSolid(f.createIfcArbitraryClosedProfileDef("AREA", None, curve), None, self.direction(_Z), height)
                 shown = f.createIfcShapeRepresentation(self.body_context, "Body", "SweptSolid", [solid])
             else:
-                corners = [f.createIfcCartesianPoint((*p, floor)) for p in outline]
-                shown = self.outline(f.createIfcPolyline([*corners, corners[0]]), "Curve3D")
+                shown = self.outline(curve)
             space = f.create_entity(
                 "IfcSpace",
                 GlobalId=ifcopenshell.guid.new(),
                 Name=room["name"] or None,
                 LongName=next((t.split("\n")[0] for t in room["labels"] if t != room["name"]), None),
                 ObjectType="ROOM",
-                ObjectPlacement=f.createIfcLocalPlacement(storey.ObjectPlacement, self.origin),
+                ObjectPlacement=f.createIfcLocalPlacement(storey.ObjectPlacement, floor),
                 Representation=f.createIfcProductDefinitionShape(None, None, [shown]),
                 CompositionType="ELEMENT",
             )

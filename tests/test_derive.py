@@ -53,7 +53,7 @@ def test_rooms_become_ifc_spaces():
     assert office.LongName == "OFFICE"
     assert ifcopenshell.util.element.get_psets(office)["Qto_SpaceBaseQuantities"]["NetFloorArea"] == 12.0
     solid = office.Representation.Representations[0].Items[0]
-    assert solid.Depth == 3.0 and len(solid.SweptArea.OuterCurve.Points) == 5
+    assert solid.Depth == 3.0 and len(solid.SweptArea.OuterCurve.Points.CoordList) == 5
     assert office.Decomposes[0].RelatingObject.is_a("IfcBuildingStorey")
 
 
@@ -196,3 +196,18 @@ def test_a_height_stored_in_the_drawing_is_used():
     walls = model.by_type("IfcWall")
     assert len(walls) == 4 and {w.Representation.Representations[0].Items[0].Depth for w in walls} == {2.7}
     assert ifcopenshell.util.element.get_psets(walls[0])["DWG_Derived"]["Height"].startswith("stored in the drawing")
+
+
+def test_a_room_outline_keeps_its_arcs():
+    """A room with a half-round end: the outline is written with the arc itself, not straight pieces."""
+    d = plan()
+    d.entities = [e for e in d.entities if e["handle"] in (100, 200)]
+    d.entities[0] = d.entities[0] | {"bulges": [0.0, 1.0, 0.0, 0.0]}  # the side from (4,0) to (4,3) bulges out
+    model, _ = ifc.build(d, "round", GIVEN)
+    (space,) = model.by_type("IfcSpace")
+    outline = space.Representation.Representations[0].Items[0].SweptArea.OuterCurve
+    assert [segment.is_a() for segment in outline.Segments] == ["IfcLineIndex", "IfcArcIndex", "IfcLineIndex", "IfcLineIndex"]
+    assert (5.5, 1.5) in outline.Points.CoordList  # the arc's outermost point, 1.5 beyond the wall line
+    # and its area is the rectangle plus the half disc, exactly
+    area = ifcopenshell.util.element.get_psets(space)["Qto_SpaceBaseQuantities"]["NetFloorArea"]
+    assert abs(area - (12 + 3.141592653589793 * 1.5**2 / 2)) < 1e-9

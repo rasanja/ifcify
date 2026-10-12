@@ -155,8 +155,6 @@ every real-world size is wrong by the same factor.
 
 **Approximate.**
 
-- Room footprints: an outline with arcs is written with the arcs broken into short straight pieces. The
-  floor area reported for the room is computed from the true arcs and is exact.
 - Splines drawn through fit points are recomputed; end tangents and closed splines are not honoured.
 - "By block" colour and linetype take the layer's. Palette colour 7, which AutoCAD shows white on a dark
   screen and black on paper, is written black for linework and white on solids.
