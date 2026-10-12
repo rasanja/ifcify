@@ -310,7 +310,11 @@ Path("drawing.ifc").write_text(ifc_text)
 - There is a size limit but no time limit on a conversion; run it on a trusted machine. A drawing that
   takes very long occupies one worker until it finishes.
 - Password-protected drawings are rejected with a 422; they are out of scope.
-- DWG R13 uses the R14 code path and is untested.
+- DWG R13 and older are out of scope. An R13 file is handed to the R14 reader, which has never been
+  tried on one.
+- Objects that only drive AutoCAD's own display and editing are not read, as nothing in an IFC depends on
+  them: viewports, views, visual styles, plot settings, sort order, the styles of tables, multileaders and
+  multilines, and the links that keep dimensions and constraints attached to geometry.
 - Solids in drawings saved as R2000 or R14 lose their rounded (filleted) faces; the rest of the solid converts.
 - A drawing's declared unit is taken at its word. A drawing that says inches but was drawn in
   millimetres (one of the test drawings does) comes out 25.4 times too large.
@@ -329,5 +333,7 @@ uv run pytest -q
 Tests compare decoded values with AutoCAD's own DXF export of the same drawing in every supported
 release, and validate the IFC output against the schema.
 
-`tools/make_fixtures.sh` rebuilds the test drawings in `tests/fixtures`. It is the only part that needs
-AutoCAD (2027, on macOS) and is not needed to run the service or the tests.
+`tools/make_fixtures.sh` rebuilds the test drawings `tests/fixtures/entities_*` from the script
+`tools/entities.scr`. It is the only part that needs AutoCAD (2027, on macOS) and is not needed to run
+the service or the tests. `tests/fixtures/extras_*` holds the few entities AutoCAD's console cannot
+create (they need a mouse pick); it was drawn by hand and is not rebuilt by the script.
