@@ -85,3 +85,16 @@ def test_parallel_requests_run_in_separate_processes():
     assert [r.headers["X-DWG-Version"] for _, r in answers] == ["R" + path.stem[-4:] for path, _ in answers]
     assert isinstance(api._executor(), ProcessPoolExecutor) and api._workers() >= 1
     assert len({process.pid for process in api._executor()._processes.values()}) >= min(2, api._workers())
+
+
+def test_heights_come_from_the_request_or_not_at_all():
+    sample = ASSETS / "architectural_example-imperial.dwg"
+    if not sample.exists():
+        pytest.skip("sample not present")
+    flat = ifcopenshell.file.from_string(client.post("/convert", content=sample.read_bytes()).text)
+    assert flat.by_type("IfcWall") and not any(w.Representation.Representations[0].RepresentationIdentifier == "Body" for w in flat.by_type("IfcWall"))
+    tall = ifcopenshell.file.from_string(client.post("/convert", content=sample.read_bytes(), params={"storey_height": 2.5}).text)
+    depths = {w.Representation.Representations[0].Items[0].Depth for w in tall.by_type("IfcWall")}
+    assert len(depths) == 1 and depths.pop() == pytest.approx(2.5 / 0.0254)  # the drawing is in inches
+    assert client.post("/convert", content=sample.read_bytes(), params={"storey_height": -1}).status_code == 422
+    assert {"storey_height", "door_height", "window_height", "window_sill"} <= {p["name"] for p in client.get("/openapi.json").json()["paths"]["/convert"]["post"]["parameters"]}

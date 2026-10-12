@@ -50,7 +50,8 @@ A DWG holds lines on layers, not walls and rooms. The converter adds building in
   is text inside the outline. Pairs of
   parallel lines on wall layers become `IfcWall` with a thickness and a wall type; a gap with a door or window
   drawn in it becomes an opening in the wall, filled by an `IfcDoor` or `IfcWindow`. Closed shapes on column
-  layers become `IfcColumn`. The original linework is kept alongside.
+  layers become `IfcColumn`. The original linework is kept alongside. These are 3D only when a height is
+  known; see "Heights" below.
 
 **Real building objects.** A drawing made with AutoCAD Architecture can hold walls, doors, windows and
 openings as objects instead of linework. Those are converted directly: a wall with its stored height,
@@ -63,41 +64,44 @@ Derived elements are an interpretation and are marked as such. Recognition depen
 naming, so a drawing with meaningless names produces drafting and generic objects only. Import into Revit
 has not been tested.
 
-### Assumed sizes: read this before using the 3D model
+### Heights: nothing is assumed
 
-**Every vertical size of a derived element is an assumption, not data from the drawing.** A 2D plan shows
-where a wall is and how thick it is; nothing in it says how tall. To write a 3D element at all, the
-converter puts in fixed values:
+A 2D plan shows where a wall is and how thick it is; nothing in it says how tall. The converter does not
+make a height up. For each wall, room and column read out of flat linework, a height comes from one of
+three places, in this order:
+
+| Source | When | What is written |
+|--------|------|-----------------|
+| The drawing | Its lines were drawn with a thickness, which is how a flat drawing stores a height | A 3D body of that height |
+| The request | You pass `storey_height` (and `door_height`, `window_height`, `window_sill` for openings), in metres | A 3D body of that height |
+| Neither | | A flat outline in plan, with its axis. No body, and openings are not cut |
+
+Each such element says which it was, in `DWG_Derived.Height` or `DWG_Room.Height`.
+
+```sh
+curl --data-binary @plan.dwg -o plan.ifc \
+  "http://127.0.0.1:8000/convert?storey_height=3&door_height=2.1&window_height=1.2&window_sill=0.9"
+```
 
 | Size | Where it comes from |
 |------|---------------------|
 | Wall length, position and thickness | measured from the drawing |
 | Door and window width | measured from the gap in the wall |
-| Room outline and floor area | measured from the drawing |
+| Room outline and floor area | measured from the drawing, or the area AutoCAD stored for it |
 | Column cross-section | measured from the drawing |
-| **Wall, room and column height** | **assumed: 3 m** |
-| **Door height** | **assumed: 2.1 m** |
-| **Window height and sill** | **assumed: 1.2 m high, 0.9 m above the floor** |
-| **Derived door and window thickness** | **assumed: 5 cm** (a placeholder slab in the opening) |
-| **Storey elevation** | **assumed: 0** |
+| Wall, room and column height | the drawing's line thickness, else the request, else none |
+| Door and window height, window sill | the request, else the opening is not cut |
+| A door or window found only as a gap | drawn as a block filling its opening, as deep as the wall |
+| Storey elevation | 0; a drawing has one model space and no storeys |
 
-What this means in practice:
+This applies only to elements *derived* from linework. Elements that the drawing holds as objects need
+none of it, because their sizes are stored: 3D solids, and AutoCAD Architecture walls, doors and windows
+(`DWG_Architecture`). One thing is simplified there: an Architecture door or window is drawn as a plain
+block filling its opening, as deep as the object's stored box but no deeper than the wall, not as a
+frame and a leaf.
 
-- What is measured in plan comes from the drawing: lengths, widths, thicknesses and floor areas. See the
-  next section for what "measured" does and does not guarantee.
-- Only what involves the vertical direction is not: heights, volumes, and the area of a wall's face
-  (its length times its assumed height). Do not take those out of the IFC.
-- AutoCAD Architecture objects are not derived and none of this applies to them: their heights and
-  widths are the drawing's own, and their properties say so (`DWG_Architecture`). One thing is still
-  simplified: a door or window is drawn as a plain block filling its opening, as deep as the object's
-  stored box but no deeper than the wall, not as a frame and a leaf.
-- Each derived element says so in its properties: `DWG_Derived.Height` or `DWG_Room.Height` reads
-  "assumed ...". Elements converted from real 3D solids in the drawing are not affected; their sizes are
-  the drawing's.
-- The values are fixed in the code for now and cannot be set per request.
-- Some drawings do record a height, as the "thickness" of a line or the elevation it is drawn at. The
-  thickness is carried as a property but neither is used for the derived elements yet, so even those
-  drawings get the assumed values.
+Floor areas never depend on a height. Volumes and wall-face areas do, so they are as good as the height
+they were given.
 
 ### What to trust in a flat 2D drawing
 
@@ -120,7 +124,8 @@ used rather than recomputed:
   measured areas agree to 0.01 percent.
 - The measured size of multiline text.
 - The width of a wide polyline, when it is the same along its length.
-- The thickness (extrusion height) of a 2D entity, kept as a property. It is not yet used as a height.
+- The thickness (extrusion height) of a 2D entity, kept as a property, and used as the height of a wall,
+  room or column read from lines that have one.
 - A dimension's measurement.
 - The sizes a solid was made with. AutoCAD keeps the length, width and height of a box or wedge, the
   radius of a sphere, the height and radii of a cylinder or cone, and the two radii of a torus, in the
@@ -288,6 +293,8 @@ from pathlib import Path
 from dwg2ifc import convert
 
 ifc_text, skipped = convert(Path("drawing.dwg").read_bytes())
+# heights for elements read out of flat linework are yours to give, in metres; none are assumed
+ifc_text, skipped = convert(Path("plan.dwg").read_bytes(), heights={"storey": 3.0, "door": 2.1})
 Path("drawing.ifc").write_text(ifc_text)
 ```
 

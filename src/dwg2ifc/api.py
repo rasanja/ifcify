@@ -123,6 +123,10 @@ def _read_ref(ref: str) -> bytes:
 async def convert_dwg(
     request: Request,
     path: str | None = Query(None, description="DWG file to read instead of the body, relative to the server's DWG2IFC_ROOT directory."),
+    storey_height: float | None = Query(None, gt=0, description="Height in metres for walls, rooms and columns read out of flat linework. A plan stores none; without this they are written as flat outlines. Not used where the drawing itself holds a height."),
+    door_height: float | None = Query(None, gt=0, description="Height in metres of door openings found in such walls. Without it they are not cut."),
+    window_height: float | None = Query(None, gt=0, description="Height in metres of window openings found in such walls. Needs `window_sill` too."),
+    window_sill: float | None = Query(None, ge=0, description="Height in metres of the window sill above the floor."),
 ) -> Response:
     """Send the DWG either as the raw request body or by reference with `path`.
 
@@ -133,7 +137,8 @@ async def convert_dwg(
     try:
         # in a worker process: requests are converted in parallel, up to DWG2IFC_WORKERS at a time
         name = Path(path).stem if path else "drawing"
-        ifc, skipped = await asyncio.get_running_loop().run_in_executor(_executor(), convert, data, name)
+        heights = {"storey": storey_height, "door": door_height, "window": window_height, "sill": window_sill}
+        ifc, skipped = await asyncio.get_running_loop().run_in_executor(_executor(), convert, data, name, heights)
     except ValueError as e:
         raise HTTPException(422, str(e)) from None
     except BrokenProcessPool:

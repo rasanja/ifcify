@@ -100,6 +100,7 @@ def spaces(drawing, owner, smallest: float) -> list[dict]:
             seen.add(key)
             found.append({"points": [p[:2] for p in points], "bulges": list(bulges), "outline": outline, "area": size,
                           "elevation": e.get("elevation", 0.0), "handle": e["handle"], "layer": e["layer"],
+                          "height": abs(e.get("thickness", 0.0)),
                           "xdata": e.get("xdata", ()), "dictionary": e.get("dictionary"), "stored": list(drawing.fields.get(e["handle"], ()))})  # fmt: skip
 
     for room in found:
@@ -132,7 +133,9 @@ def spaces(drawing, owner, smallest: float) -> list[dict]:
 
 
 def _segments(drawing, owner, wanted) -> list:
-    """Straight pieces of the visible linework on the wanted layers: (x1, y1, x2, y2, layer handle)."""
+    """Straight pieces of the visible linework on the wanted layers: (x1, y1, x2, y2, layer handle, height).
+
+    The height is the thickness the entity was drawn with, which is how a flat drawing stores one; 0 if none."""
     out = []
     for e in drawing.entities:
         layer = drawing.layers.get(e["layer"], {})
@@ -141,13 +144,13 @@ def _segments(drawing, owner, wanted) -> list:
         if e.get("extrusion", _Z) != _Z:
             continue
         if e["type"] == "LINE":
-            out.append((*e["start"][:2], *e["end"][:2], e["layer"]))
+            out.append((*e["start"][:2], *e["end"][:2], e["layer"], abs(e.get("thickness", 0.0))))
         elif e["type"] in ("LWPOLYLINE", "POLYLINE_2D"):
             points = [p[:2] for p in e["points"]]
             pairs = zip(points, points[1:] + points[:1]) if e["closed"] else zip(points, points[1:])
             for i, (p, q) in enumerate(pairs):
                 if not (e["bulges"][i] if i < len(e["bulges"]) else 0.0):
-                    out.append((*p, *q, e["layer"]))
+                    out.append((*p, *q, e["layer"], abs(e.get("thickness", 0.0))))
     return out
 
 
@@ -170,25 +173,25 @@ def walls(drawing, owner, wanted, thinnest: float, thickest: float, shortest: fl
     its group's own axes ("frame": origin and direction; "a", "b" along it; "across") for `join`.
     """
     buckets = {}
-    for x1, y1, x2, y2, layer in _segments(drawing, owner, wanted):
+    for x1, y1, x2, y2, layer, tall in _segments(drawing, owner, wanted):
         length = math.hypot(x2 - x1, y2 - y1)
         if length < thinnest:
             continue
         angle = math.atan2(y2 - y1, x2 - x1) % math.pi
         key = round(math.degrees(angle) * 2) % 360  # half-degree bins; 0 and 180 degrees are the same direction
-        buckets.setdefault(key, []).append((x1, y1, x2, y2, layer))
+        buckets.setdefault(key, []).append((x1, y1, x2, y2, layer, tall))
 
     out = []
     for lines in buckets.values():
         # measure along and across the first line's direction, from its start, so far-away drawings keep precision
-        ox, oy, x2, y2, _ = lines[0]
+        ox, oy, x2, y2, _, _ = lines[0]
         length = math.hypot(x2 - ox, y2 - oy)
         ux, uy = (x2 - ox) / length, (y2 - oy) / length
         faces = []
-        for x1, y1, x2, y2, layer in lines:
+        for x1, y1, x2, y2, layer, tall in lines:
             a, b = sorted(((x1 - ox) * ux + (y1 - oy) * uy, (x2 - ox) * ux + (y2 - oy) * uy))
             across = (-(x1 - ox) * uy + (y1 - oy) * ux - (x2 - ox) * uy + (y2 - oy) * ux) / 2
-            faces.append({"across": across, "a": a, "b": b, "layer": layer, "above": [], "below": []})
+            faces.append({"across": across, "a": a, "b": b, "layer": layer, "tall": tall, "above": [], "below": []})
         faces.sort(key=lambda f: f["across"])
         candidates = []
         for i, low in enumerate(faces):
@@ -212,6 +215,8 @@ def walls(drawing, owner, wanted, thinnest: float, thickest: float, shortest: fl
                     "end": (ox + b * ux - middle * uy, oy + b * uy + middle * ux),
                     "thickness": gap,
                     "layer": low["layer"],
+                    # a height only when both faces were drawn with the same one
+                    "height": low["tall"] if low["tall"] == high["tall"] else 0.0,
                     "frame": (ox, oy, ux, uy), "a": a, "b": b, "across": middle,
                 })  # fmt: skip
     return out
@@ -270,7 +275,7 @@ def footprints(drawing, owner, wanted, smallest: float, largest: float) -> list[
             continue
         if e.get("extrusion", _Z) != _Z:
             continue
-        shape = {"layer": e["layer"], "handle": e["handle"], "elevation": e.get("elevation", 0.0)}
+        shape = {"layer": e["layer"], "handle": e["handle"], "elevation": e.get("elevation", 0.0), "height": abs(e.get("thickness", 0.0))}
         if e["type"] == "CIRCLE":
             shape |= {"center": e["center"][:2], "radius": e["radius"], "elevation": e["center"][2]}
             size, (cx, cy) = math.pi * e["radius"] ** 2, e["center"][:2]

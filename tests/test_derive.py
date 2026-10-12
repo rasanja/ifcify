@@ -4,6 +4,8 @@ from dwg2ifc import derive, ifc
 from dwg2ifc.entities import Drawing
 
 Z = (0.0, 0.0, 1.0)
+# heights a caller supplies, in metres; flat linework stores none
+GIVEN = {"storey": 3.0, "door": 2.1, "window": 1.2, "sill": 0.9}
 
 
 def plan() -> Drawing:
@@ -44,7 +46,7 @@ def test_rooms_come_from_outlines_and_the_text_inside_them():
 
 
 def test_rooms_become_ifc_spaces():
-    model, _ = ifc.build(plan(), "plan")
+    model, _ = ifc.build(plan(), "plan", GIVEN)
     spaces = {s.Name: s for s in model.by_type("IfcSpace")}
     assert set(spaces) == {"101", "102", "STORE"}
     office = spaces["101"]
@@ -98,7 +100,7 @@ def test_a_line_between_two_others_makes_two_walls():
 
 
 def test_walls_become_ifc_walls_with_types():
-    model, _ = ifc.build(double_line_room(), "room")
+    model, _ = ifc.build(double_line_room(), "room", GIVEN)
     walls = model.by_type("IfcWall")
     assert len(walls) == 4
     kind = model.by_type("IfcWallType")[0]
@@ -124,7 +126,7 @@ def test_columns_come_from_closed_shapes_on_column_layers():
         common | {"type": "CIRCLE", "handle": 602, "center": (5.0, 1.0, 0.0), "radius": 0.25},
         common | {"type": "CIRCLE", "handle": 603, "center": (8.0, 1.0, 0.0), "radius": 0.01},  # a mark, not a column
     ]  # fmt: skip
-    model, _ = ifc.build(d, "columns")
+    model, _ = ifc.build(d, "columns", GIVEN)
     columns = model.by_type("IfcColumn")
     profiles = sorted(c.Representation.Representations[0].Items[0].SweptArea.is_a() for c in columns)
     assert profiles == ["IfcArbitraryClosedProfileDef", "IfcCircleProfileDef"]
@@ -145,7 +147,7 @@ def wall_with_a_door() -> Drawing:
 
 
 def test_a_gap_with_a_door_in_it_is_an_opening_not_two_walls():
-    model, _ = ifc.build(wall_with_a_door(), "door")
+    model, _ = ifc.build(wall_with_a_door(), "door", GIVEN)
     (wall,) = model.by_type("IfcWall")
     assert wall.Representation.Representations[0].Items[0].SweptArea.XDim == 5.0
     (opening,) = model.by_type("IfcOpeningElement")
@@ -163,3 +165,34 @@ def test_a_gap_with_nothing_in_it_stays_a_gap():
     d.entities = [e for e in d.entities if e["type"] != "ARC"]
     model, _ = ifc.build(d, "gap")
     assert len(model.by_type("IfcWall")) == 2 and not model.by_type("IfcOpeningElement")
+
+
+def test_without_a_height_nothing_is_invented():
+    """No height in the drawing and none from the caller: walls, rooms and columns are flat outlines, openings are not cut."""
+    d = wall_with_a_door()
+    d.layers[13] = {"name": "S-COLS", "color": 7}
+    d.entities += plan().entities[:1]
+    d.entities.append({"owner": 1, "invisible": 0, "color": None, "lineweight": 29, "layer": 13, "extrusion": Z,
+                       "type": "CIRCLE", "handle": 602, "center": (5.0, 1.0, 0.0), "radius": 0.25})  # fmt: skip
+    model, _ = ifc.build(d, "flat")
+    (wall,), (space,), (column,) = model.by_type("IfcWall"), model.by_type("IfcSpace"), model.by_type("IfcColumn")
+    for product in (wall, space, column):
+        shown = product.Representation.Representations[0]
+        assert shown.RepresentationIdentifier == "FootPrint" and not shown.Items[0].is_a("IfcSolidModel")
+    assert not model.by_type("IfcExtrudedAreaSolid") and not model.by_type("IfcOpeningElement")
+    # the wall is still one wall across the door, 5 m long and 0.2 m wide in plan
+    xs, ys = zip(*(p.Coordinates for p in wall.Representation.Representations[0].Items[0].Points))
+    assert (min(xs), max(xs), min(ys), max(ys)) == (0.0, 5.0, -0.1, 0.1)
+    said = ifcopenshell.util.element.get_psets(wall)["DWG_Derived"]["Height"]
+    assert said.startswith("not in the drawing") and "assum" not in said
+
+
+def test_a_height_stored_in_the_drawing_is_used():
+    """Lines drawn with a thickness of 2.7 store the wall's height; that wins over what the caller gives."""
+    d = double_line_room()
+    for e in d.entities:
+        e["thickness"] = 2.7
+    model, _ = ifc.build(d, "thick", GIVEN)
+    walls = model.by_type("IfcWall")
+    assert len(walls) == 4 and {w.Representation.Representations[0].Items[0].Depth for w in walls} == {2.7}
+    assert ifcopenshell.util.element.get_psets(walls[0])["DWG_Derived"]["Height"].startswith("stored in the drawing")

@@ -179,7 +179,7 @@ def test_plan_walls_become_ifc_walls():
     sample = ASSETS / "architectural_example-imperial.dwg"
     if not sample.exists():
         pytest.skip("sample not present")
-    model = ifcopenshell.file.from_string(convert(sample.read_bytes())[0])
+    model = ifcopenshell.file.from_string(convert(sample.read_bytes(), heights={"storey": 3.0})[0])
     # the drawing's own parameter says bldWALL=6": every wall is 6 inches, 152 mm, thick
     assert [t.Name for t in model.by_type("IfcWallType")] == ["Wall 152 mm"]
     assert len(model.by_type("IfcWall")) == 14

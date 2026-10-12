@@ -207,8 +207,9 @@ def _kind(item) -> str:
 
 
 class _Builder:
-    def __init__(self, drawing: Drawing, name: str) -> None:
+    def __init__(self, drawing: Drawing, name: str, heights: dict | None = None) -> None:
         self.d = drawing
+        self.heights = heights or {}  # heights the caller supplies, in metres: storey, door, window, sill
         self.f = f = ifcopenshell.api.project.create_file(version="IFC4X3")
         self.by_owner = defaultdict(list)
         self.skipped = drawing.skipped.copy()
@@ -438,10 +439,21 @@ class _Builder:
                 made = f.createIfcGroup(ifcopenshell.guid.new(), None, names.get(handle, f"{handle:X}"), group["description"] or None)
                 f.createIfcRelAssignsToGroup(ifcopenshell.guid.new(), None, None, None, members, None, made)
 
+    def tall(self, stored: float, key: str = "storey"):
+        """A height for an element read out of flat linework, and where it comes from. None when there is none:
+        the drawing's own (the thickness its lines were drawn with) first, then the caller's, and never a guess."""
+        if stored > 0:
+            return stored, "stored in the drawing, as the thickness of its lines"
+        if self.heights.get(key):
+            return self.heights[key] / self.metres, "given in the request"
+        return None, "not in the drawing and not given in the request, so none is written"
+
+    def outline(self, curve, kind="Curve2D"):
+        return self.f.createIfcShapeRepresentation(self.footprint_context, "FootPrint", kind, [curve])
+
     def spaces(self, storey, owner) -> None:
-        """Rooms the drawing outlines and labels, as IfcSpace: a footprint extruded to an assumed height."""
+        """Rooms the drawing outlines and labels, as IfcSpace: a footprint, extruded when a height is known."""
         f = self.f
-        height = 3.0 / self.metres  # shortcut: a plan does not say how high its rooms are
         shift = self.origin_shift
         made = []
         for room in derive.spaces(self.d, owner, 0.25 / self.metres**2):
@@ -450,10 +462,17 @@ class _Builder:
                 continue
             if derive.area(outline) < 0:
                 outline.reverse()
-            corners = [f.createIfcCartesianPoint(p) for p in outline]
-            profile = f.createIfcArbitraryClosedProfileDef("AREA", None, f.createIfcPolyline([*corners, corners[0]]))
-            base = self.f.createIfcAxis2Placement3D(f.createIfcCartesianPoint((0.0, 0.0, float(room["elevation"] - shift[2]))))
-            solid = f.createIfcExtrudedAreaSolid(profile, base, self.direction(_Z), height)
+            height, source = self.tall(room["height"])
+            floor = float(room["elevation"] - shift[2])
+            if height:
+                corners = [f.createIfcCartesianPoint(p) for p in outline]
+                profile = f.createIfcArbitraryClosedProfileDef("AREA", None, f.createIfcPolyline([*corners, corners[0]]))
+                base = self.f.createIfcAxis2Placement3D(f.createIfcCartesianPoint((0.0, 0.0, floor)))
+                solid = f.createIfcExtrudedAreaSolid(profile, base, self.direction(_Z), height)
+                shown = f.createIfcShapeRepresentation(self.body_context, "Body", "SweptSolid", [solid])
+            else:
+                corners = [f.createIfcCartesianPoint((*p, floor)) for p in outline]
+                shown = self.outline(f.createIfcPolyline([*corners, corners[0]]), "Curve3D")
             space = f.create_entity(
                 "IfcSpace",
                 GlobalId=ifcopenshell.guid.new(),
@@ -461,9 +480,7 @@ class _Builder:
                 LongName=next((t.split("\n")[0] for t in room["labels"] if t != room["name"]), None),
                 ObjectType="ROOM",
                 ObjectPlacement=f.createIfcLocalPlacement(storey.ObjectPlacement, self.origin),
-                Representation=f.createIfcProductDefinitionShape(
-                    None, None, [f.createIfcShapeRepresentation(self.body_context, "Body", "SweptSolid", [solid])]
-                ),
+                Representation=f.createIfcProductDefinitionShape(None, None, [shown]),
                 CompositionType="ELEMENT",
             )
             # the area AutoCAD itself stored for the outline, when there is one; otherwise ours, measured from it
@@ -476,7 +493,7 @@ class _Builder:
             self.property_set(
                 "DWG_Room",
                 {"Labels": " | ".join(room["labels"]), "OutlineLayer": layer, "OutlineHandle": f"{room['handle']:X}",
-                 "Height": "assumed 3 m; the drawing does not give one"}
+                 "Height": source}
                 # values AutoCAD itself computed and stored in the drawing for this outline, as text in its format
                 | {"AreaSource": "stored in the drawing by AutoCAD" if stored else "measured from the outline"}
                 | {f"Stored{name}": value for name, value, _ in room["stored"]},
@@ -489,14 +506,15 @@ class _Builder:
             f.createIfcRelAggregates(ifcopenshell.guid.new(), None, None, None, storey, made)
 
     def walls(self, storey, owner) -> None:
-        """Walls read from pairs of parallel lines on wall layers, as IfcWall: an axis and a box of assumed height.
+        """Walls read from pairs of parallel lines on wall layers, as IfcWall: an axis, and a box when a height is known.
 
         Laid out the standard way (placed at the start of the axis, a rectangle extruded upwards, a material
         layer of the wall's thickness, a type per thickness) so that tools can treat them as real walls.
+        Without a height the wall is its axis and its outline in plan.
         """
         f = self.f
-        height = 3.0 / self.metres  # shortcut: a plan does not say how high its walls are
         shift = self.origin_shift
+        sources = defaultdict(list)
         wanted = lambda name: classify(name) == "IfcWall" and is_plan(name)  # noqa: E731
         layer_name = lambda wall: self.d.layers.get(wall["layer"], {}).get("name", "")  # noqa: E731
         by_thickness = defaultdict(list)
@@ -523,9 +541,14 @@ class _Builder:
             )
             axis = f.createIfcPolyline([f.createIfcCartesianPoint((0.0, 0.0)), f.createIfcCartesianPoint((length, 0.0))])
             middle = f.createIfcAxis2Placement2D(f.createIfcCartesianPoint((length / 2, 0.0)))
-            box = f.createIfcExtrudedAreaSolid(
-                f.createIfcRectangleProfileDef("AREA", None, middle, length, thickness), None, self.direction(_Z), height
-            )
+            height, source = self.tall(wall["height"])
+            if height:
+                solid = f.createIfcExtrudedAreaSolid(f.createIfcRectangleProfileDef("AREA", None, middle, length, thickness), None, self.direction(_Z), height)
+                shown = f.createIfcShapeRepresentation(self.body_context, "Body", "SweptSolid", [solid])
+            else:
+                half = thickness / 2
+                ring = [f.createIfcCartesianPoint(p) for p in ((0.0, -half), (length, -half), (length, half), (0.0, half))]
+                shown = self.outline(f.createIfcPolyline([*ring, ring[0]]))
             product = f.create_entity(
                 "IfcWall",
                 GlobalId=ifcopenshell.guid.new(),
@@ -535,17 +558,17 @@ class _Builder:
                 Representation=f.createIfcProductDefinitionShape(
                     None,
                     None,
-                    [
-                        # body first: some readers draw whichever representation is listed first
-                        f.createIfcShapeRepresentation(self.body_context, "Body", "SweptSolid", [box]),
-                        f.createIfcShapeRepresentation(self.axis_context, "Axis", "Curve2D", [axis]),
-                    ],
+                    # body first: some readers draw whichever representation is listed first
+                    [shown, f.createIfcShapeRepresentation(self.axis_context, "Axis", "Curve2D", [axis])],
                 ),
             )
             by_thickness[millimetres].append((product, thickness))
             for distance, width, (kind, handle) in wall["openings"]:
-                # shortcut: a plan gives an opening's width only; a door is taken as 2.1 m high, a window as 1.2 m at 0.9 m
-                sill, tall = ((0.0, 2.1) if kind == "IfcDoor" else (0.9, 1.2))
+                # a plan gives an opening's width only: it is cut when the caller says how high it is, and where
+                tall = self.heights.get("door" if kind == "IfcDoor" else "window")
+                sill = 0.0 if kind == "IfcDoor" else self.heights.get("sill")
+                if not height or not tall or sill is None:
+                    continue
                 sill, tall = sill / self.metres, tall / self.metres
 
                 def box(depth, width=width, tall=tall):
@@ -565,7 +588,7 @@ class _Builder:
                 if filler is None or not filler.is_a(kind) or handle in used:
                     filler = f.create_entity(
                         kind, GlobalId=ifcopenshell.guid.new(), Name=kind[3:], ObjectType="derived from plan linework",
-                        ObjectPlacement=in_wall(), Representation=box(0.05 / self.metres),
+                        ObjectPlacement=in_wall(), Representation=box(thickness),  # a block filling the opening
                     )  # fmt: skip
                     made.append(filler)
                     self.described[layer_name(wall), f"derived {kind[3:].lower()}", "by layer", "by layer"].append(filler)
@@ -575,15 +598,16 @@ class _Builder:
             layer = self.d.layers.get(wall["layer"], {}).get("name", "")
             self.described[layer, "derived wall", "by layer", "by layer"].append(product)
             made.append(product)
+            sources[source].append(product)
         if not made:
             return
         f.createIfcRelContainedInSpatialStructure(ifcopenshell.guid.new(), None, None, None, made, storey)
-        self.property_set(
-            "DWG_Derived",
-            {"Source": "two parallel lines on a wall layer, taken as the faces of a wall; gaps that hold a door or window are openings",
-             "Height": "assumed: walls 3 m, doors 2.1 m, windows 1.2 m at 0.9 m; the drawing does not give them"},
-            made,
-        )  # fmt: skip
+        source = "two parallel lines on a wall layer, taken as the faces of a wall; gaps that hold a door or window are openings"
+        fillers = [product for product in made if not product.is_a("IfcWall")]
+        if fillers:
+            self.property_set("DWG_Derived", {"Source": source, "Height": "given in the request"}, fillers)
+        for height_source, group in sources.items():
+            self.property_set("DWG_Derived", {"Source": source, "Height": height_source}, group)
         material = f.createIfcMaterial("Unspecified", None, None)
         for millimetres, group in by_thickness.items():
             name = f"Wall {millimetres} mm"
@@ -690,27 +714,33 @@ class _Builder:
                 f.createIfcRelDefinesByType(ifcopenshell.guid.new(), None, None, None, occurrences, kind)
 
     def columns(self, storey, owner) -> None:
-        """Columns: closed shapes on column layers, extruded to the same assumed height as the walls."""
+        """Columns: closed shapes on column layers, extruded when a height is known."""
         f = self.f
         shift = self.origin_shift
         wanted = lambda name: classify(name) == "IfcColumn" and is_plan(name)  # noqa: E731
-        made = []
+        made, sources = [], defaultdict(list)
         # between 10 cm and 2 m across: smaller is a mark, larger is not a column
         for shape in derive.footprints(self.d, owner, wanted, (0.1 / self.metres) ** 2, (2.0 / self.metres) ** 2):
             if "radius" in shape:
                 cx, cy = shape["center"]
                 profile = f.createIfcCircleProfileDef("AREA", None, None, float(shape["radius"]))
+                flat = f.createIfcCircle(f.createIfcAxis2Placement2D(f.createIfcCartesianPoint((0.0, 0.0))), float(shape["radius"]))
             else:
                 outline = shape["outline"] if derive.area(shape["outline"]) > 0 else shape["outline"][::-1]
                 cx, cy = outline[0]
                 corners = [f.createIfcCartesianPoint(p) for p in _distinct([(x - cx, y - cy) for x, y in outline])]
                 if len(corners) < 3:
                     continue
-                profile = f.createIfcArbitraryClosedProfileDef("AREA", None, f.createIfcPolyline([*corners, corners[0]]))
+                flat = f.createIfcPolyline([*corners, corners[0]])
+                profile = f.createIfcArbitraryClosedProfileDef("AREA", None, flat)
             base = f.createIfcAxis2Placement3D(
                 f.createIfcCartesianPoint((float(cx - shift[0]), float(cy - shift[1]), float(shape["elevation"] - shift[2])))
             )
-            solid = f.createIfcExtrudedAreaSolid(profile, None, self.direction(_Z), 3.0 / self.metres)
+            height, source = self.tall(shape["height"])
+            if height:
+                shown = f.createIfcShapeRepresentation(self.body_context, "Body", "SweptSolid", [f.createIfcExtrudedAreaSolid(profile, None, self.direction(_Z), height)])
+            else:
+                shown = self.outline(flat)
             product = f.create_entity(
                 "IfcColumn",
                 GlobalId=ifcopenshell.guid.new(),
@@ -718,20 +748,15 @@ class _Builder:
                 ObjectType="derived from plan linework",
                 Tag=f"{shape['handle']:X}",
                 ObjectPlacement=f.createIfcLocalPlacement(storey.ObjectPlacement, base),
-                Representation=f.createIfcProductDefinitionShape(
-                    None, None, [f.createIfcShapeRepresentation(self.body_context, "Body", "SweptSolid", [solid])]
-                ),
+                Representation=f.createIfcProductDefinitionShape(None, None, [shown]),
             )
+            sources[source].append(product)
             self.described[self.d.layers.get(shape["layer"], {}).get("name", ""), "derived column", "by layer", "by layer"].append(product)
             made.append(product)
         if made:
             f.createIfcRelContainedInSpatialStructure(ifcopenshell.guid.new(), None, None, None, made, storey)
-            self.property_set(
-                "DWG_Derived",
-                {"Source": "a closed shape on a column layer, taken as the column's section",
-                 "Height": "assumed 3 m; the drawing does not give one"},
-                made,
-            )  # fmt: skip
+            for source, group in sources.items():
+                self.property_set("DWG_Derived", {"Source": "a closed shape on a column layer, taken as the column's section", "Height": source}, group)
 
     def element_class(self, e, items) -> str:
         """Solids and meshes are things in the model, and so is a block whose name or layer says what it is.
@@ -1393,7 +1418,10 @@ class _Builder:
         return [c for c in cells if c is not None]
 
 
-def build(drawing: Drawing, name: str) -> tuple[ifcopenshell.file, dict[str, int]]:
-    """Returns the IFC model and a count of what could not be converted, by entity type."""
-    builder = _Builder(drawing, name)
+def build(drawing: Drawing, name: str, heights: dict | None = None) -> tuple[ifcopenshell.file, dict[str, int]]:
+    """Returns the IFC model and a count of what could not be converted, by entity type.
+
+    `heights` are the caller's, in metres, for elements read out of flat linework that stores none:
+    "storey" (walls, rooms, columns), "door", "window" and "sill". Nothing is assumed in their place."""
+    builder = _Builder(drawing, name, heights)
     return builder.f, dict(builder.skipped)
