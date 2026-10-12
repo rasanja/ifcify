@@ -47,6 +47,9 @@ A DWG holds lines on layers, not walls and rooms. The converter adds building in
   `PRTA0001`, `Fluorescent Fixture`) makes its solids and block inserts IFC doors, windows, light fixtures,
   furniture and so on. A named block recognised this way becomes a type and its inserts occurrences of it;
   blocks whose names are not recognised stay plain drafting, without a type.
+  An insert of a dynamic block that was stretched or flipped is drawn by AutoCAD from a private copy
+  (`*U12`); the drawing stores which block it was made from, and that name is the one used for the
+  element's name, class and type. The values its parameters were set to are not read yet.
 - **Elements derived from plans.** Room outlines become `IfcSpace` with a floor area, and a name when there
   is text inside the outline. Pairs of
   parallel lines on wall layers become `IfcWall` with a thickness and a wall type; a gap with a door or window
