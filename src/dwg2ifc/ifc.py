@@ -1299,6 +1299,9 @@ class _Builder:
                 if oriented:
                     points = [p for _, start, end, *_ in loop for p in (start, end)]
                     extent = sum((max(c) - min(c)) ** 2 for c in zip(*points))
+                    # a whole circle starts and ends at one point: its size is its diameter
+                    rims = [4 * sum(c * c for c in curve[3]) for _, start, end, curve, *_ in loop if curve[0] == "ellipse" and _same(start, end)]
+                    extent = max([extent, *rims])
                     loops.append((extent, f.createIfcEdgeLoop(oriented)))
                 elif ok and loop and loop[0][1]:  # a loop that is one point: the apex of a cone
                     loops.append((0, f.createIfcVertexLoop(vertex(loop[0][1]))))

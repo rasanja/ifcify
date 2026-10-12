@@ -1,0 +1,3681 @@
+Attribute Qt::AA_PluginApplication must be set before QCoreApplication is created.
+AcCoreConsole: StdOutConsoleMode: processed-output: enabled,auto
+AutoCAD Core Engine Console - Copyright 2026 Autodesk, Inc.  All rights reserved. (X.60.M.171)
+
+Execution Path:
+
+Version Number: X.60.M.171 (UNICODE)
+LogFilePath has been set to the working folder.
+.
+Loading Modeler DLLs.
+Regenerating model.
+Command: 
+Command: 
+Command: 
+Command: FILEDIA 
+Enter new value for FILEDIA <0>: 0
+Command: QAFLAGS 
+Enter new value for QAFLAGS <2>: 2
+Command: LUPREC 
+Enter new value for LUPREC <4>: 8
+Command: LIST 
+Select objects: ALL
+72 found
+Select objects: 
+                  SOLID     Layer: "0"
+                            Space: Model space
+                   Thickness = 4.00000000
+                   Handle = 5ad
+              from point, X=60.00000000  Y=340.00000000  Z=0.00000000
+               and point, X=66.00000000  Y=340.00000000  Z=0.00000000
+                to point, X=60.00000000  Y=346.00000000  Z=0.00000000
+               and point, X=66.00000000  Y=346.00000000  Z=0.00000000
+                  LWPOLYLINE  Layer: "0"
+                            Space: Model space
+                   Thickness = 4.00000000
+                   Handle = 5ac
+              Open 
+         Thickness 4.00000000
+    Constant width 0.00000000
+              area   74.13716694
+            length   29.42477796 
+          at point  X=45.00000000  Y=340.00000000  Z=0.00000000
+          at point  X=55.00000000  Y=340.00000000  Z=0.00000000
+             bulge 1.00000000
+            center  X=55.00000000  Y=343.00000000  Z=0.00000000
+            radius 3.00000000
+       start angle       270
+         end angle        90
+          at point  X=55.00000000  Y=346.00000000  Z=0.00000000
+          at point  X=45.00000000  Y=346.00000000  Z=0.00000000
+                  ARC       Layer: "0"
+                            Space: Model space
+                   Thickness = 4.00000000
+                   Handle = 5ab
+            center point, X=35.00000000  Y=340.00000000  Z=0.00000000
+            radius 3.00000000
+             start angle      0
+               end angle     90
+            length 4.71238898
+                  CIRCLE    Layer: "0"
+                            Space: Model space
+                   Thickness = 4.00000000
+                   Handle = 5aa
+            center point, X=20.00000000  Y=340.00000000  Z=0.00000000
+            radius 3.00000000
+     circumference 18.84955592 
+              area 28.27433388 
+                  LINE      Layer: "0"
+                            Space: Model space
+                   Thickness = 4.00000000
+                   Handle = 5a9
+              from point, X=0.00000000  Y=340.00000000  Z=0.00000000
+                to point, X=10.00000000  Y=340.00000000  Z=0.00000000
+          Length =10.00000000,  Angle in XY Plane =      0
+                  Delta X =10.00000000, Delta Y = 0.00000000, Delta Z =0.00000000
+                  BLOCK REFERENCE  Layer: "0"
+                            Space: Model space
+                   Handle = 596
+       Block Name: "NOTED"
+                at point, X=320.00000000  Y=290.00000000  Z=0.00000000
+   X scale factor: 1.00000000
+   Y scale factor: 1.00000000
+   rotation angle:      0
+   Z scale factor: 1.00000000
+         InsUnits: Millimeters
+  Unit conversion: 1.00000000
+  Scale uniformly: No
+  Allow exploding: Yes
+                  ATTRIBUTE  Layer: "0"
+                            Space: Model space
+                   Handle = 598
+             Style = "Standard"    
+        Annotative: No
+Location:        X=320.00000000  Y=300.00000000  Z=0.00000000
+Width:           10.00000000
+Normal:          X=0.00000000  Y=0.00000000  Z=1.00000000
+Rotation:                0
+Text height:     0.20000000
+Line spacing:    Multiple (1x = 0.33333333)
+Attachment:      TopLeft
+Flow direction:  ByStyle
+             value Two words
+               tag NOTE
+             flags normal
+                  END SEQUENCE  Layer: "0"
+                            Space: Model space
+                   Handle = 597
+                  SHAPE     Layer: "0"
+                            Space: Model space
+                   Handle = 585
+                  BOX    From file ltypeshp.shx
+            origin point, X=120.00000000  Y=230.00000000  Z=0.00000000
+             scale 2.00000000
+          rotation angle      0
+                  LIGHT   
+                            Space: Model space
+                   Handle = 571
+             Type: Point
+             Name: "Pointlight1"
+         Location: X= 80.000000  Y= 230.000000  Z= 5.000000
+ Intensity Factor: 1.000000
+            Color: 255,255,255
+       Lamp Color: 255,255,255
+       Plot glyph: Off
+ Attenuation Type: None
+        Use Limit: False
+           Shadow: On
+                  PLANESURFACE  Layer: "0"
+                            Space: Model space
+                   Handle = 55f
+                   Display Type = Isolines
+                   U-isolines = 6,
+                   V-isolines = 6,
+   Bounding Box: Lower Bound X = 100.00000000, Y = 230.00000000, Z = 0.00000000
+                 Upper Bound X = 110.00000000, Y = 240.00000000, Z = 0.00000000
+   Associative: No
+   Number of Trimming edges = 0
+                  MULTILEADER  Layer: "0"
+                            Space: Model space
+                   Handle = 54d
+Leader Type:        StraightLeader
+Content Type:       MTextContent
+Landing:            ON
+Leader Number:      0
+Vertex:             X = 0.00000000, Y = 300.00000000, Z = 0.00000000
+Vertex:             X = 10.00000000, Y = 305.00000000, Z = 0.00000000
+Multileader style:  Standard
+Annotative:         NO
+                  ACAD_TABLE  Layer: "0"
+                            Space: Model space
+                   Handle = 530
+Position:        X= 0.000000, Y= 270.000000, Z= 0.000000
+Normal:          X= 0.000000, Y= 0.000000, Z= 1.000000
+Horizontal Dir:  X= 1.000000, Y= 0.000000, Z= 0.000000
+Number of columns:  3
+Number of rows:     4
+Table Style:        Standard
+                  IMAGE     Layer: "0"
+                            Space: Model space
+                   Handle = 520
+Image:                   dwg2ifc_fixture
+Insertion:               X=60.00000000,  Y=230.00000000,  Z=0.00000000
+Scale:                   10.00000000
+Rotation angle:          0        
+Brightness:              50
+Contrast:                50
+Fade:                    0
+Show image:              Yes
+Show non-ortho:          Yes
+Background Transparency: Off
+Clipping:                On
+Clip boundary type:      Rectangular
+Number of boundary points: 4
+       at point, X=60.00000000,  Y=230.00000000,  Z=0.00000000
+       at point, X=60.00000000,  Y=240.00000000,  Z=0.00000000
+       at point, X=70.00000000,  Y=240.00000000,  Z=0.00000000
+       at point, X=70.00000000,  Y=230.00000000,  Z=0.00000000
+                  MESH      Layer: "0"
+                            Space: Model space
+                   Handle = 50c
+          Watertight mesh = YES
+  Initial mesh face count = 54
+Initial mesh vertex count = 56
+        Mesh Smooth Level = 0
+  Level 0 mesh face count = 54
+Level 0 mesh vertex count = 56
+            Bounding box: Lower bound X = 40.00000000, Y = 230.00000000, Z = 0.00000000
+                          Upper bound X = 50.00000000, Y = 240.00000000, Z = 5.00000000
+                  HELIX     Layer: "0"
+                            Space: Model space
+                   Handle = 4fd
+                  Position: X = 20.00000000, Y = 230.00000000, Z = 0.00000000
+                  Length: 94.77681130
+                  Base radius: 5.00000000
+                  Top radius: 5.00000000
+                  Turns: 3.00000000
+                  Step Dist: 3.33333333
+                  Axis: X = 0.00000000, Y = 0.00000000, Z = 1.00000000
+                  CIRCLE    Layer: "0"
+                            Space: Model space
+                   Handle = 4ed
+                   Group = PAIR
+            center point, X=5.00000000  Y=235.00000000  Z=0.00000000
+            radius 2.00000000
+     circumference 12.56637061 
+              area 12.56637061 
+                  LINE      Layer: "0"
+                            Space: Model space
+                   Handle = 4ec
+              from point, X=0.00000000  Y=230.00000000  Z=0.00000000
+                to point, X=10.00000000  Y=230.00000000  Z=0.00000000
+          Length =10.00000000,  Angle in XY Plane =      0
+                  Delta X =10.00000000, Delta Y = 0.00000000, Delta Z =0.00000000
+                  TEXT      Layer: "0"
+                            Space: Model space
+                   Handle = 4dd
+             Style = "NOTES"    
+        Annotative: No
+             Typeface = Arial 
+             start point, X=0.00000000  Y=250.00000000  Z=0.00000000
+            height 2.00000000
+              text Styled text
+          rotation angle      0
+             width scale factor 1.20000000
+         obliquing angle     15
+        generation normal
+                  CIRCLE    Layer: "OFFLAYER"
+                            Space: Model space
+                   Handle = 4cc
+            center point, X=15.00000000  Y=190.00000000  Z=0.00000000
+            radius 3.00000000
+     circumference 18.84955592 
+              area 28.27433388 
+                  CIRCLE    Layer: "REDLAYER"
+                            Space: Model space
+                   Handle = 4cb
+            center point, X=5.00000000  Y=190.00000000  Z=0.00000000
+            radius 3.00000000
+     circumference 18.84955592 
+              area 28.27433388 
+                  LINE      Layer: "0"
+                            Space: Model space
+                   Color: 200,100,50    Linetype: "BYLAYER"
+                   LineWeight: 0.35 mm
+                   Handle = 4ca
+              from point, X=0.00000000  Y=182.00000000  Z=0.00000000
+                to point, X=10.00000000  Y=182.00000000  Z=0.00000000
+          Length =10.00000000,  Angle in XY Plane =      0
+                  Delta X =10.00000000, Delta Y = 0.00000000, Delta Z =0.00000000
+                  LINE      Layer: "0"
+                            Space: Model space
+                   Color: 5 (blue)    Linetype: "BYLAYER"
+                   Handle = 4c9
+              from point, X=0.00000000  Y=180.00000000  Z=0.00000000
+                to point, X=10.00000000  Y=180.00000000  Z=0.00000000
+          Length =10.00000000,  Angle in XY Plane =      0
+                  Delta X =10.00000000, Delta Y = 0.00000000, Delta Z =0.00000000
+                  WIPEOUT   Layer: "0"
+                            Space: Model space
+                   Handle = 4b7
+Number of boundary points: 4
+       at point, X=0.00000000,  Y=160.00000000,  Z=0.00000000
+       at point, X=10.00000000,  Y=160.00000000,  Z=0.00000000
+       at point, X=10.00000000,  Y=170.00000000,  Z=0.00000000
+       at point, X=0.00000000,  Y=170.00000000,  Z=0.00000000
+                  REGION    Layer: "0"
+                            Space: Model space
+                   Handle = 4a9
+                             Area: 28.27433388 
+                        Perimeter: 18.84955592 
+   Bounding Box: Lower Bound X = 17.00000000, Y = 57.00000000, Z = 0.00000000
+                 Upper Bound X = 23.00000000, Y = 63.00000000, Z = 0.00000000
+                  3DSOLID   Layer: "0"
+                            Space: Model space
+                   Handle = 497
+         History = None
+    Show History = No
+      Solid type = Wedge
+         Position, X = 455.00000000 Y = 4.00000000 Z = 0.00000000
+           Length: 10.00000000
+            Width: 8.00000000
+           Height: 6.00000000
+         Rotation: 0
+                  3DSOLID   Layer: "0"
+                            Space: Model space
+                   Handle = 486
+         History = None
+    Show History = No
+      Solid type = Torus
+         Position, X = 430.00000000 Y = 5.00000000 Z = 5.00000000
+     Torus radius: 6.00000000
+      Tube radius: 2.00000000
+                  3DSOLID   Layer: "0"
+                            Space: Model space
+                   Handle = 475
+         History = None
+    Show History = No
+      Solid type = Cylinder
+         Position, X = 410.00000000 Y = 5.00000000 Z = 0.00000000
+           Radius: 3.00000000
+           Height: 7.00000000
+                  3DSOLID   Layer: "0"
+                            Space: Model space
+                   Handle = 471
+         History = None
+    Show History = No
+      Solid type = Cone
+         Position, X = 390.00000000 Y = 5.00000000 Z = 10.00000000
+           Normal: X = 0.00000000 Y = 0.00000000 Z = -1.00000000
+      Base radius: 4.00000000
+       Top radius: 6.00000000
+           Height: 8.00000000
+                  3DSOLID   Layer: "0"
+                            Space: Model space
+                   Handle = 46d
+         History = None
+    Show History = No
+      Solid type = Cone
+         Position, X = 370.00000000 Y = 5.00000000 Z = 0.00000000
+      Base radius: 4.00000000
+       Top radius: 2.00000000
+           Height: 8.00000000
+                  3DSOLID   Layer: "0"
+                            Space: Model space
+                   Handle = 469
+         History = None
+    Show History = No
+      Solid type = Cone
+         Position, X = 350.00000000 Y = 5.00000000 Z = 0.00000000
+      Base radius: 4.00000000
+       Top radius: 0.00000000
+           Height: 8.00000000
+                  3DSOLID   Layer: "0"
+                            Space: Model space
+                   Handle = 458
+         History = None
+    Show History = No
+      Solid type = Sphere
+         Position, X = 330.00000000 Y = 5.00000000 Z = 5.00000000
+           Radius: 4.00000000
+                  3DSOLID   Layer: "0"
+                            Space: Model space
+                   Handle = 454
+         History = None
+    Show History = No
+      Solid type = Box
+         Position, X = 305.00000000 Y = 4.00000000 Z = 0.00000000
+           Length: 10.00000000
+            Width: 8.00000000
+           Height: 6.00000000
+         Rotation: 0
+                  BLOCK REFERENCE  Layer: "0"
+                            Space: Model space
+                   Handle = 442
+       Block Name: "SYMBOL"
+                at point, X=260.00000000  Y=0.00000000  Z=5.00000000
+   X scale factor: 1.00000000
+   Y scale factor: 1.00000000
+   Z scale factor: 1.00000000
+Extrusion direction relative to UCS:
+                   X=0.00000000  Y=-1.00000000  Z=0.00000000
+         InsUnits: Millimeters
+  Unit conversion: 1.00000000
+  Scale uniformly: No
+  Allow exploding: Yes
+                  ATTRIBUTE  Layer: "0"
+                            Space: Model space
+                   Handle = 444
+             Style = "Standard"    
+        Annotative: No
+             Typeface = Arial 
+             start point, X=258.58578644  Y=0.00000000  Z=6.41421356
+            height 1.00000000
+             value Tilted
+               tag TAG1
+             width scale factor 1.00000000
+         obliquing angle      0
+Extrusion direction relative to UCS:
+                   X=0.00000000  Y=-1.00000000  Z=0.00000000
+             flags normal
+        generation normal
+                  END SEQUENCE  Layer: "0"
+                            Space: Model space
+                   Handle = 443
+                  TEXT      Layer: "0"
+                            Space: Model space
+                   Handle = 441
+             Style = "Standard"    
+        Annotative: No
+             Typeface = Arial 
+             start point, X=200.00000000  Y=0.00000000  Z=30.00000000
+            height 2.00000000
+              text Tilted plane
+             width scale factor 1.00000000
+         obliquing angle      0
+Extrusion direction relative to UCS:
+                   X=0.00000000  Y=-1.00000000  Z=0.00000000
+        generation normal
+                  LWPOLYLINE  Layer: "0"
+                            Space: Model space
+                   Handle = 440
+            Closed 
+    Constant width 0.00000000
+Extrusion direction relative to UCS:
+                   X=0.00000000  Y=-1.00000000  Z=0.00000000
+              area   107.13495408
+         perimeter   43.66536993 
+          at point  X=240.00000000  Y=0.00000000  Z=5.00000000
+          at point  X=250.00000000  Y=0.00000000  Z=5.00000000
+             bulge 0.41421356
+            center  X=250.00000000  Y=0.00000000  Z=10.00000000
+            radius 5.00000000
+       start angle       270
+         end angle         0
+          at point  X=255.00000000  Y=0.00000000  Z=10.00000000
+          at point  X=240.00000000  Y=0.00000000  Z=15.00000000
+                  ARC       Layer: "0"
+                            Space: Model space
+                   Handle = 43f
+            center point, X=220.00000000  Y=0.00000000  Z=10.00000000
+            radius 4.00000000
+Extrusion direction relative to UCS:
+                   X=0.00000000  Y=-1.00000000  Z=0.00000000
+            length 6.98131701
+             total angle    100
+                  CIRCLE    Layer: "0"
+                            Space: Model space
+                   Handle = 43e
+            center point, X=200.00000000  Y=0.00000000  Z=10.00000000
+            radius 4.00000000
+Extrusion direction relative to UCS:
+                   X=0.00000000  Y=-1.00000000  Z=0.00000000
+     circumference 25.13274123 
+              area 50.26548246 
+                  BLOCK REFERENCE  Layer: "0"
+                            Space: Model space
+                   Handle = 42e
+       Block Name: "SYMBOL"
+                at point, X=120.00000000  Y=20.00000000  Z=0.00000000
+   X scale factor: 1.00000000
+   Y scale factor: 1.00000000
+   rotation angle:      0
+   Z scale factor: 1.00000000
+         InsUnits: Millimeters
+  Unit conversion: 1.00000000
+  Scale uniformly: No
+  Allow exploding: Yes
+                  ATTRIBUTE  Layer: "0"
+                            Space: Model space
+                   Handle = 430
+             Style = "Standard"    
+        Annotative: No
+             Typeface = Arial 
+             start point, X=120.00000000  Y=22.00000000  Z=0.00000000
+            height 1.00000000
+             value Grid
+               tag TAG1
+          rotation angle      0
+             width scale factor 1.00000000
+         obliquing angle      0
+             flags normal
+        generation normal
+                  END SEQUENCE  Layer: "0"
+                            Space: Model space
+                   Handle = 42f
+         # columns 3
+    column spacing 10.00000000
+            # rows 2
+       row spacing 8.00000000
+                  BLOCK REFERENCE  Layer: "0"
+                            Space: Model space
+                   Handle = 41e
+       Block Name: "SYMBOL"
+                at point, X=140.00000000  Y=0.00000000  Z=0.00000000
+   X scale factor: -1.00000000
+   Y scale factor: 1.00000000
+   rotation angle:      0
+   Z scale factor: 1.00000000
+         InsUnits: Millimeters
+  Unit conversion: 1.00000000
+  Scale uniformly: No
+  Allow exploding: Yes
+                  ATTRIBUTE  Layer: "0"
+                            Space: Model space
+                   Handle = 420
+             Style = "Standard"    
+        Annotative: No
+             Typeface = Arial 
+             start point, X=140.00000000  Y=2.00000000  Z=0.00000000
+            height 1.00000000
+             value Mirrored
+               tag TAG1
+             width scale factor 1.00000000
+         obliquing angle      0
+Extrusion direction relative to UCS:
+                   X=0.00000000  Y=0.00000000  Z=-1.00000000
+             flags normal
+        generation normal
+                  END SEQUENCE  Layer: "0"
+                            Space: Model space
+                   Handle = 41f
+                  BLOCK REFERENCE  Layer: "0"
+                            Space: Model space
+                   Handle = 41b
+       Block Name: "SYMBOL"
+                at point, X=130.00000000  Y=0.00000000  Z=0.00000000
+   X scale factor: 2.00000000
+   Y scale factor: 0.50000000
+   rotation angle:     30
+   Z scale factor: 2.00000000
+         InsUnits: Millimeters
+  Unit conversion: 1.00000000
+  Scale uniformly: No
+  Allow exploding: Yes
+                  ATTRIBUTE  Layer: "0"
+                            Space: Model space
+                   Handle = 41d
+             Style = "Standard"    
+        Annotative: No
+             Typeface = Arial 
+             start point, X=129.50000000  Y=0.86602540  Z=0.00000000
+            height 0.50000000
+             value Value B
+               tag TAG1
+          rotation angle     30
+             width scale factor 4.00000000
+         obliquing angle      0
+             flags normal
+        generation normal
+                  END SEQUENCE  Layer: "0"
+                            Space: Model space
+                   Handle = 41c
+                  BLOCK REFERENCE  Layer: "0"
+                            Space: Model space
+                   Handle = 418
+       Block Name: "SYMBOL"
+                at point, X=120.00000000  Y=0.00000000  Z=0.00000000
+   X scale factor: 1.00000000
+   Y scale factor: 1.00000000
+   rotation angle:      0
+   Z scale factor: 1.00000000
+         InsUnits: Millimeters
+  Unit conversion: 1.00000000
+  Scale uniformly: No
+  Allow exploding: Yes
+                  ATTRIBUTE  Layer: "0"
+                            Space: Model space
+                   Handle = 41a
+             Style = "Standard"    
+        Annotative: No
+             Typeface = Arial 
+             start point, X=120.00000000  Y=2.00000000  Z=0.00000000
+            height 1.00000000
+             value Value A
+               tag TAG1
+          rotation angle      0
+             width scale factor 1.00000000
+         obliquing angle      0
+             flags normal
+        generation normal
+                  END SEQUENCE  Layer: "0"
+                            Space: Model space
+                   Handle = 419
+                  POLYLINE  Layer: "0"
+                            Space: Model space
+                   Handle = 3fe
+   Polyface mesh
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 3ff
+   Polyface vertex
+                at point, X=20.00000000  Y=140.00000000  Z=0.00000000
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 400
+   Polyface vertex
+                at point, X=30.00000000  Y=140.00000000  Z=0.00000000
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 401
+   Polyface vertex
+                at point, X=30.00000000  Y=150.00000000  Z=0.00000000
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 402
+   Polyface vertex
+                at point, X=20.00000000  Y=150.00000000  Z=0.00000000
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 403
+   Polyface vertex
+                at point, X=25.00000000  Y=145.00000000  Z=6.00000000
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 404
+   Polyface vertex
+                at point, X=24.82483080  Y=144.01628685  Z=5.95969885
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 405
+   Polyface vertex
+                at point, X=24.47449241  Y=142.04886054  Z=5.87909655
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 406
+   Polyface vertex
+                at point, X=23.59864643  Y=137.13029477  Z=5.67759080
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 407
+Polyface face record
+    Face vertices:  2 3 5
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 408
+Polyface face record
+    Face vertices:  3 4 5
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 409
+Polyface face record
+    Face vertices:  4 1 5
+                  END SEQUENCE  Layer: "0"
+                            Space: Model space
+                   Handle = 40a
+                  POLYLINE  Layer: "0"
+                            Space: Model space
+                   Handle = 3e6
+                   3x3 mesh
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 3e7
+              Mesh
+                at point, X=0.00000000  Y=140.00000000  Z=0.00000000
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 3e8
+              Mesh
+                at point, X=5.00000000  Y=140.00000000  Z=1.00000000
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 3e9
+              Mesh
+                at point, X=10.00000000  Y=140.00000000  Z=0.00000000
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 3ea
+              Mesh
+                at point, X=0.00000000  Y=145.00000000  Z=1.00000000
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 3eb
+              Mesh
+                at point, X=5.00000000  Y=145.00000000  Z=3.00000000
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 3ec
+              Mesh
+                at point, X=10.00000000  Y=145.00000000  Z=1.00000000
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 3ed
+              Mesh
+                at point, X=0.00000000  Y=150.00000000  Z=0.00000000
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 3ee
+              Mesh
+                at point, X=5.00000000  Y=150.00000000  Z=1.00000000
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 3ef
+              Mesh
+                at point, X=10.00000000  Y=150.00000000  Z=0.00000000
+                  END SEQUENCE  Layer: "0"
+                            Space: Model space
+                   Handle = 3f0
+                  HATCH     Layer: "0"
+                            Space: Model space
+                   Handle = 3d8
+                 Hatch pattern ANSI31 
+                 Annotative: No
+                 Hatch scale 1.00000000
+                 Hatch angle      0
+                 Associative
+                 Area      139.26990817
+                 Origin    X=0.00000000  Y=0.00000000  Z=0.00000000
+                  LWPOLYLINE  Layer: "0"
+                            Space: Model space
+                   Handle = 3d7
+            Closed 
+    Constant width 0.00000000
+              area   139.26990817
+         perimeter   45.70796327 
+          at point  X=80.00000000  Y=30.00000000  Z=0.00000000
+          at point  X=90.00000000  Y=30.00000000  Z=0.00000000
+             bulge 1.00000000
+            center  X=90.00000000  Y=35.00000000  Z=0.00000000
+            radius 5.00000000
+       start angle       270
+         end angle        90
+          at point  X=90.00000000  Y=40.00000000  Z=0.00000000
+          at point  X=80.00000000  Y=40.00000000  Z=0.00000000
+                  HATCH     Layer: "0"
+                            Space: Model space
+                   Handle = 3c8
+                 Hatch pattern SOLID 
+                 Associative
+                 Area      100.00000000
+                 Origin    X=0.00000000  Y=0.00000000  Z=0.00000000
+                  LWPOLYLINE  Layer: "0"
+                            Space: Model space
+                   Handle = 3c5
+            Closed 
+    Constant width 0.00000000
+              area   100.00000000
+         perimeter   40.00000000 
+          at point  X=60.00000000  Y=30.00000000  Z=0.00000000
+          at point  X=70.00000000  Y=30.00000000  Z=0.00000000
+          at point  X=70.00000000  Y=40.00000000  Z=0.00000000
+          at point  X=60.00000000  Y=40.00000000  Z=0.00000000
+                  MTEXT     Layer: "0"
+                            Space: Model space
+                   Handle = 3b7
+             Style = "Standard"    
+        Annotative: No
+Location:        X=12.09000000  Y=130.00000000  Z=0.00000000
+Width:           0.00000000
+Normal:          X=0.00000000  Y=0.00000000  Z=1.00000000
+Rotation:                0
+Text height:     0.18000000
+Line spacing:    Multiple (1x = 0.30000000)
+Attachment:      MiddleLeft
+Flow direction:  LtoR
+Contents:        \A1;Leader note
+                  LEADER    Layer: "0"
+                            Space: Model space
+                   Handle = 3b6
+associative: no
+Normal:               X=0.00000000  Y=0.00000000  Z=1.00000000
+Horizontal direction: X=1.00000000  Y=0.00000000  Z=0.00000000
+Vertex:        X=0.00000000  Y=125.00000000  Z=0.00000000
+Vertex:        X=5.00000000  Y=130.00000000  Z=0.00000000
+Vertex:        X=12.00000000  Y=130.00000000  Z=0.00000000
+Hook Line: Off
+Arrow:     On
+Path type: Straight
+Associated to:   MTEXT    Handle = 3B7
+dimension style: "Standard"
+        Annotative: No
+                  DIMENSION  Layer: "0"
+                            Space: Model space
+                   Handle = 39e
+associative: no
+type: X ordinate
+feature      defining point: X=60.00000000  Y=0.00000000  Z=0.00000000
+leader       defining point: X=62.00000000  Y=-6.00000000  Z=0.00000000
+feature UCS  defining point: X=0.00000000  Y=0.00000000  Z=0.00000000
+default text position: X=62.00000000  Y=-6.53373806  Z=0.00000000
+default text
+dimension style: "Standard"
+Annotative: No
+                  DIMENSION  Layer: "0"
+                            Space: Model space
+                   Handle = 382
+associative: no
+type: arc
+1st extension defining point: X=45.00000000  Y=0.00000000  Z=0.00000000
+2nd extension defining point: X=40.00000000  Y=5.00000000  Z=0.00000000
+arc center    defining point: X=40.00000000  Y=0.00000000  Z=0.00000000
+dimension arc defining point: X=46.98212002  Y=4.03112887  Z=0.00000000
+default text position: X=45.70087713  Y=5.70087713  Z=0.00000000
+default text
+dimension style: "Standard"
+Annotative: No
+                  DIMENSION  Layer: "0"
+                            Space: Model space
+                   Handle = 35f
+associative: yes
+type: diameter
+       defining point: X=15.52786405  Y=2.23606798  Z=0.00000000
+defining point:        X=24.47213595  Y=-2.23606798  Z=0.00000000
+user specified text position: X=30.81116644  Y=-5.00000000  Z=0.00000000
+default text
+dimension style: "Standard"
+dimension style overrides:
+ DIMUPT      On                  
+Annotative: No
+                  DIMENSION  Layer: "0"
+                            Space: Model space
+                   Handle = 349
+associative: yes
+type: radial
+center defining point: X=20.00000000  Y=0.00000000  Z=0.00000000
+defining point:        X=24.47213595  Y=2.23606798  Z=0.00000000
+user specified text position: X=30.72945430  Y=5.00000000  Z=0.00000000
+default text
+dimension style: "Standard"
+dimension style overrides:
+ DIMUPT      On                  
+Annotative: No
+                  DIMENSION  Layer: "0"
+                            Space: Model space
+                   Handle = 32d
+associative: no
+type: aligned
+1st extension  defining point: X=0.00000000  Y=0.00000000  Z=0.00000000
+2nd extension  defining point: X=10.00000000  Y=5.00000000  Z=0.00000000
+dimension line defining point: X=8.00000000  Y=9.00000000  Z=0.00000000
+default text position: X=3.00000000  Y=6.50000000  Z=0.00000000
+default text
+dimension style: "Standard"
+Annotative: No
+                  DIMENSION  Layer: "0"
+                            Space: Model space
+                   Handle = 31e
+associative: no
+type: horizontal
+1st extension  defining point: X=0.00000000  Y=0.00000000  Z=0.00000000
+2nd extension  defining point: X=10.00000000  Y=0.00000000  Z=0.00000000
+dimension line defining point: X=10.00000000  Y=-5.00000000  Z=0.00000000
+default text position: X=5.00000000  Y=-5.00000000  Z=0.00000000
+default text
+dimension style: "Standard"
+Annotative: No
+                  MTEXT     Layer: "0"
+                            Space: Model space
+                   Handle = 30e
+             Style = "Standard"    
+        Annotative: No
+Location:        X=0.00000000  Y=115.00000000  Z=0.00000000
+Width:           40.00000000
+Normal:          X=0.00000000  Y=0.00000000  Z=1.00000000
+Rotation:                0
+Text height:     2.50000000
+Line spacing:    Multiple (1x = 4.16666667)
+Attachment:      TopLeft
+Flow direction:  ByStyle
+Contents:        First line\PSecond {\fArial|b1;bold} line
+                  TEXT      Layer: "0"
+                            Space: Model space
+                   Handle = 302
+             Style = "Standard"    
+        Annotative: No
+             Typeface = Arial 
+               mid point, X=40.00000000  Y=100.00000000  Z=0.00000000
+            height 2.50000000
+              text Centered text
+          rotation angle     30
+             width scale factor 1.00000000
+         obliquing angle      0
+        generation normal
+                  TEXT      Layer: "0"
+                            Space: Model space
+                   Handle = 301
+             Style = "Standard"    
+        Annotative: No
+             Typeface = Arial 
+             start point, X=0.00000000  Y=100.00000000  Z=0.00000000
+            height 2.50000000
+              text Hello DWG
+          rotation angle      0
+             width scale factor 1.00000000
+         obliquing angle      0
+        generation normal
+                  XLINE     Layer: "0"
+                            Space: Model space
+                   Handle = 2f5
+                   base point, X=0.00000000  Y=95.00000000  Z=0.00000000
+                   unit direction, X=0.70710678  Y=0.70710678  Z=0.00000000
+                   angle in XY plane =        45
+                  RAY       Layer: "0"
+                            Space: Model space
+                   Handle = 2f4
+                   base point, X=0.00000000  Y=90.00000000  Z=0.00000000
+                   unit direction, X=0.70710678  Y=0.70710678  Z=0.00000000
+                   angle in XY plane =        45
+                  3D FACE   Layer: "0"
+                            Space: Model space
+                   Handle = 2e8
+             first point, X=50.00000000  Y=45.00000000  Z=0.00000000
+            second point, X=60.00000000  Y=45.00000000  Z=0.00000000
+             third point, X=60.00000000  Y=55.00000000  Z=5.00000000
+            fourth point, X=50.00000000  Y=55.00000000  Z=5.00000000
+                  SOLID     Layer: "0"
+                            Space: Model space
+                   Handle = 2dc
+              from point, X=30.00000000  Y=30.00000000  Z=0.00000000
+               and point, X=40.00000000  Y=30.00000000  Z=0.00000000
+                to point, X=30.00000000  Y=40.00000000  Z=0.00000000
+               and point, X=40.00000000  Y=40.00000000  Z=0.00000000
+                  SPLINE    Layer: "0"
+                            Space: Model space
+                   Handle = 2d0
+                           Length: 29.53576560 
+                            Order: 4
+                       Properties: Planar, Non-Rational, Non-Periodic
+                 Parametric Range: Start0.00000000
+                                     End28.28427125 
+         Number of control points: 7
+                   Control Points: X = 0.00000000, Y = 70.00000000, Z = 0.00000000
+                                   X = 1.66666667, Y = 72.85714286, Z = 0.00000000
+                                   X = 5.00000000, Y = 78.57142857, Z = 0.00000000
+                                   X = 10.00000000, Y = 65.71428571, Z = 0.00000000
+                                   X = 15.00000000, Y = 78.57142857, Z = 0.00000000
+                                   X = 18.33333333, Y = 72.85714286, Z = 0.00000000
+                                   X = 20.00000000, Y = 70.00000000, Z = 0.00000000
+             Number of fit points: 5
+                        User Data: Fit Points
+                                   X = 0.00000000, Y = 70.00000000, Z = 0.00000000
+                                   X = 5.00000000, Y = 75.00000000, Z = 0.00000000
+                                   X = 10.00000000, Y = 70.00000000, Z = 0.00000000
+                                   X = 15.00000000, Y = 75.00000000, Z = 0.00000000
+                                   X = 20.00000000, Y = 70.00000000, Z = 0.00000000
+              Fit point tolerance: 1.00000000E-10
+                  POLYLINE  Layer: "0"
+                            Space: Model space
+                   Handle = 2c0
+            Closed space
+              area 55.90169944
+         perimeter 36.18033989
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 2c2
+             Space
+                at point, X=0.00000000  Y=50.00000000  Z=0.00000000
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 2c3
+             Space
+                at point, X=10.00000000  Y=50.00000000  Z=5.00000000
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 2c4
+             Space
+                at point, X=10.00000000  Y=60.00000000  Z=5.00000000
+                  END SEQUENCE  Layer: "0"
+                            Space: Model space
+                   Handle = 2c1
+                  POLYLINE  Layer: "0"
+                            Space: Model space
+                   Handle = 2af
+              Open
+    starting width 0.00000000
+      ending width 0.00000000
+              area 48.18680395
+            length 31.15805071
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 2b1
+                at point, X=0.00000000  Y=45.00000000  Z=0.00000000
+    starting width 0.00000000
+      ending width 0.00000000
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 2b2
+                at point, X=10.00000000  Y=45.00000000  Z=0.00000000
+    starting width 0.00000000
+      ending width 0.00000000
+             bulge 0.27698396
+            center X=10.00000000  Y=50.66666667  Z=0.00000000
+            radius 5.66666667
+       start angle    270
+         end angle    332
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 2b3
+                at point, X=15.00000000  Y=48.00000000  Z=0.00000000
+    starting width 0.00000000
+      ending width 0.00000000
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 2b4
+                at point, X=0.00000000  Y=49.00000000  Z=0.00000000
+    starting width 0.00000000
+      ending width 0.00000000
+                  END SEQUENCE  Layer: "0"
+                            Space: Model space
+                   Handle = 2b0
+                  LWPOLYLINE  Layer: "0"
+                            Space: Model space
+                   Handle = 2a3
+              Open 
+              area   25.00000000
+            length   15.00000000 
+          at point  X=20.00000000  Y=30.00000000  Z=0.00000000
+    starting width 0.50000000
+      ending width 1.00000000
+          at point  X=30.00000000  Y=30.00000000  Z=0.00000000
+    starting width 1.00000000
+      ending width 1.00000000
+          at point  X=30.00000000  Y=35.00000000  Z=0.00000000
+                  LWPOLYLINE  Layer: "0"
+                            Space: Model space
+                   Handle = 2a2
+            Closed 
+    Constant width 0.00000000
+              area   107.13495408
+         perimeter   43.66536993 
+          at point  X=0.00000000  Y=30.00000000  Z=0.00000000
+          at point  X=10.00000000  Y=30.00000000  Z=0.00000000
+             bulge 0.41421356
+            center  X=10.00000000  Y=35.00000000  Z=0.00000000
+            radius 5.00000000
+       start angle       270
+         end angle         0
+          at point  X=15.00000000  Y=35.00000000  Z=0.00000000
+          at point  X=0.00000000  Y=40.00000000  Z=0.00000000
+                  POINT     Layer: "0"
+                            Space: Model space
+                   Handle = 296
+                at point, X=5.00000000  Y=20.00000000  Z=0.00000000
+                  ELLIPSE   Layer: "0"
+                            Space: Model space
+                   Handle = 295
+                           Length: 12.67217417 
+                           Center: X = 80.00000000, Y = 0.00000000, Z = 0.00000000
+                       Major Axis: X = 10.00000000, Y = 0.00000000, Z = 0.00000000
+                       Minor Axis: X = 0.00000000, Y = 3.00000000, Z = 0.00000000
+                      Start Point: X = 90.00000000, Y = 0.00000000, Z = 0.00000000
+                        End Point: X = 78.29335963, Y = 2.95598783, Z = 0.00000000
+                      Start Angle: 0         
+                        End Angle: 120       
+                     Radius Ratio: 0.30000000 
+                  ELLIPSE   Layer: "0"
+                            Space: Model space
+                   Handle = 294
+                             Area: 94.24777961
+                    Circumference: 43.85910070 
+                           Center: X = 60.00000000, Y = 0.00000000, Z = 0.00000000
+                       Major Axis: X = 10.00000000, Y = 0.00000000, Z = 0.00000000
+                       Minor Axis: X = 0.00000000, Y = 3.00000000, Z = 0.00000000
+                     Radius Ratio: 0.30000000 
+                  ARC       Layer: "0"
+                            Space: Model space
+                   Handle = 293
+            center point, X=40.00000000  Y=0.00000000  Z=0.00000000
+            radius 5.00000000
+             start angle      0
+               end angle    135
+            length 11.78097245
+                  CIRCLE    Layer: "0"
+                            Space: Model space
+                   Handle = 292
+            center point, X=20.00000000  Y=0.00000000  Z=0.00000000
+            radius 5.00000000
+     circumference 31.41592654 
+              area 78.53981634 
+                  LINE      Layer: "0"
+                            Space: Model space
+                   Handle = 291
+              from point, X=0.00000000  Y=0.00000000  Z=0.00000000
+                to point, X=10.00000000  Y=5.00000000  Z=2.00000000
+          In Current UCS, Length =11.18033989,  Angle in XY Plane =     27
+                  3D Length  =11.35781669,  Angle from XY Plane =     10
+                  Delta X =10.00000000, Delta Y = 5.00000000, Delta Z =2.00000000
+Command: MASSPROP 
+Select objects: ALL
+72 found
+Select objects: 
+ ----------------   REGIONS   ---------------- 
+Area:                    28.27433388 
+Perimeter:               18.84955592 
+Bounding box:         X: 17.00000000  --  23.00000000 
+                      Y: 57.00000000  --  63.00000000 
+Centroid:             X: 20.00000000 
+                      Y: 60.00000000 
+Moments of inertia:   X: 101851.21922754  
+                      Y: 11373.35080416  
+Product of inertia:  XY: -33929.20065877  
+Radii of gyration:    X: 60.01874707 
+                      Y: 20.05617112 
+Principal moments and X-Y directions about centroid:
+                      I: 63.61725124 along [1.00000000 0.00000000]
+                      J: 63.61725124 along [0.00000000 1.00000000]
+ ----------------   SOLIDS    ---------------- 
+Mass:                    2665.05357068 
+Volume:                  2665.05357068 
+Bounding box:         X: 300.00000000  --  460.00000000 
+                      Y: -3.00000000  --  13.00000000 
+                      Z: 0.00000000  --  10.00000000 
+Centroid:             X: 379.18220482 
+                      Y: 4.72983658 
+                      Z: 4.05703747 
+Moments of inertia:   X: 136645.36499580  
+                      Y: 3.89486450E+08  
+                      Z: 3.89509235E+08  
+Products of inertia: XY: -4.79750444E+06  
+                     YZ: -52141.11100720  
+                     ZX: -4.12707667E+06  
+Radii of gyration:    X: 7.16051866 
+                      Y: 382.29023536 
+                      Z: 382.30141690 
+Principal moments and X-Y-Z directions about centroid:
+                      I: 32988.71372018 along [0.99998635 0.00285938 0.00437305]
+                      J: 6263395.16391876 along [-0.00339121 0.99191049 0.12689395]
+                      K: 6270728.82229230 along [-0.00397483 -0.12690705 0.99190665]
+Command: QUIT 
+Really want to discard all changes to drawing? <N> YLogFilePath has been restored to ''.
+
+=== ORDER ===
+Attribute Qt::AA_PluginApplication must be set before QCoreApplication is created.
+AcCoreConsole: StdOutConsoleMode: processed-output: enabled,auto
+AutoCAD Core Engine Console - Copyright 2026 Autodesk, Inc.  All rights reserved. (X.60.M.171)
+
+Execution Path:
+
+Version Number: X.60.M.171 (UNICODE)
+LogFilePath has been set to the working folder.
+.
+Loading Modeler DLLs.
+Regenerating model.
+Command: 
+Command: 
+Command: 
+Command: FILEDIA 
+Enter new value for FILEDIA <0>: 0
+Command: QAFLAGS 
+Enter new value for QAFLAGS <2>: 2
+Command: LUPREC 
+Enter new value for LUPREC <4>: 8
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  SOLID     Layer: "0"
+                            Space: Model space
+                   Thickness = 4.00000000
+                   Handle = 5ad
+              from point, X=60.00000000  Y=340.00000000  Z=0.00000000
+               and point, X=66.00000000  Y=340.00000000  Z=0.00000000
+                to point, X=60.00000000  Y=346.00000000  Z=0.00000000
+               and point, X=66.00000000  Y=346.00000000  Z=0.00000000
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  LWPOLYLINE  Layer: "0"
+                            Space: Model space
+                   Thickness = 4.00000000
+                   Handle = 5ac
+              Open 
+         Thickness 4.00000000
+    Constant width 0.00000000
+              area   74.13716694
+            length   29.42477796 
+          at point  X=45.00000000  Y=340.00000000  Z=0.00000000
+          at point  X=55.00000000  Y=340.00000000  Z=0.00000000
+             bulge 1.00000000
+            center  X=55.00000000  Y=343.00000000  Z=0.00000000
+            radius 3.00000000
+       start angle       270
+         end angle        90
+          at point  X=55.00000000  Y=346.00000000  Z=0.00000000
+          at point  X=45.00000000  Y=346.00000000  Z=0.00000000
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  ARC       Layer: "0"
+                            Space: Model space
+                   Thickness = 4.00000000
+                   Handle = 5ab
+            center point, X=35.00000000  Y=340.00000000  Z=0.00000000
+            radius 3.00000000
+             start angle      0
+               end angle     90
+            length 4.71238898
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  CIRCLE    Layer: "0"
+                            Space: Model space
+                   Thickness = 4.00000000
+                   Handle = 5aa
+            center point, X=20.00000000  Y=340.00000000  Z=0.00000000
+            radius 3.00000000
+     circumference 18.84955592 
+              area 28.27433388 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  LINE      Layer: "0"
+                            Space: Model space
+                   Thickness = 4.00000000
+                   Handle = 5a9
+              from point, X=0.00000000  Y=340.00000000  Z=0.00000000
+                to point, X=10.00000000  Y=340.00000000  Z=0.00000000
+          Length =10.00000000,  Angle in XY Plane =      0
+                  Delta X =10.00000000, Delta Y = 0.00000000, Delta Z =0.00000000
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  BLOCK REFERENCE  Layer: "0"
+                            Space: Model space
+                   Handle = 596
+       Block Name: "NOTED"
+                at point, X=320.00000000  Y=290.00000000  Z=0.00000000
+   X scale factor: 1.00000000
+   Y scale factor: 1.00000000
+   rotation angle:      0
+   Z scale factor: 1.00000000
+         InsUnits: Millimeters
+  Unit conversion: 1.00000000
+  Scale uniformly: No
+  Allow exploding: Yes
+                  ATTRIBUTE  Layer: "0"
+                            Space: Model space
+                   Handle = 598
+             Style = "Standard"    
+        Annotative: No
+Location:        X=320.00000000  Y=300.00000000  Z=0.00000000
+Width:           10.00000000
+Normal:          X=0.00000000  Y=0.00000000  Z=1.00000000
+Rotation:                0
+Text height:     0.20000000
+Line spacing:    Multiple (1x = 0.33333333)
+Attachment:      TopLeft
+Flow direction:  ByStyle
+             value Two words
+               tag NOTE
+             flags normal
+                  END SEQUENCE  Layer: "0"
+                            Space: Model space
+                   Handle = 597
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  SHAPE     Layer: "0"
+                            Space: Model space
+                   Handle = 585
+                  BOX    From file ltypeshp.shx
+            origin point, X=120.00000000  Y=230.00000000  Z=0.00000000
+             scale 2.00000000
+          rotation angle      0
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  LIGHT   
+                            Space: Model space
+                   Handle = 571
+             Type: Point
+             Name: "Pointlight1"
+         Location: X= 80.000000  Y= 230.000000  Z= 5.000000
+ Intensity Factor: 1.000000
+            Color: 255,255,255
+       Lamp Color: 255,255,255
+       Plot glyph: Off
+ Attenuation Type: None
+        Use Limit: False
+           Shadow: On
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  PLANESURFACE  Layer: "0"
+                            Space: Model space
+                   Handle = 55f
+                   Display Type = Isolines
+                   U-isolines = 6,
+                   V-isolines = 6,
+   Bounding Box: Lower Bound X = 100.00000000, Y = 230.00000000, Z = 0.00000000
+                 Upper Bound X = 110.00000000, Y = 240.00000000, Z = 0.00000000
+   Associative: No
+   Number of Trimming edges = 0
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  MULTILEADER  Layer: "0"
+                            Space: Model space
+                   Handle = 54d
+Leader Type:        StraightLeader
+Content Type:       MTextContent
+Landing:            ON
+Leader Number:      0
+Vertex:             X = 0.00000000, Y = 300.00000000, Z = 0.00000000
+Vertex:             X = 10.00000000, Y = 305.00000000, Z = 0.00000000
+Multileader style:  Standard
+Annotative:         NO
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  ACAD_TABLE  Layer: "0"
+                            Space: Model space
+                   Handle = 530
+Position:        X= 0.000000, Y= 270.000000, Z= 0.000000
+Normal:          X= 0.000000, Y= 0.000000, Z= 1.000000
+Horizontal Dir:  X= 1.000000, Y= 0.000000, Z= 0.000000
+Number of columns:  3
+Number of rows:     4
+Table Style:        Standard
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  IMAGE     Layer: "0"
+                            Space: Model space
+                   Handle = 520
+Image:                   dwg2ifc_fixture
+Insertion:               X=60.00000000,  Y=230.00000000,  Z=0.00000000
+Scale:                   10.00000000
+Rotation angle:          0        
+Brightness:              50
+Contrast:                50
+Fade:                    0
+Show image:              Yes
+Show non-ortho:          Yes
+Background Transparency: Off
+Clipping:                On
+Clip boundary type:      Rectangular
+Number of boundary points: 4
+       at point, X=60.00000000,  Y=230.00000000,  Z=0.00000000
+       at point, X=60.00000000,  Y=240.00000000,  Z=0.00000000
+       at point, X=70.00000000,  Y=240.00000000,  Z=0.00000000
+       at point, X=70.00000000,  Y=230.00000000,  Z=0.00000000
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  MESH      Layer: "0"
+                            Space: Model space
+                   Handle = 50c
+          Watertight mesh = YES
+  Initial mesh face count = 54
+Initial mesh vertex count = 56
+        Mesh Smooth Level = 0
+  Level 0 mesh face count = 54
+Level 0 mesh vertex count = 56
+            Bounding box: Lower bound X = 40.00000000, Y = 230.00000000, Z = 0.00000000
+                          Upper bound X = 50.00000000, Y = 240.00000000, Z = 5.00000000
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  HELIX     Layer: "0"
+                            Space: Model space
+                   Handle = 4fd
+                  Position: X = 20.00000000, Y = 230.00000000, Z = 0.00000000
+                  Length: 94.77681130
+                  Base radius: 5.00000000
+                  Top radius: 5.00000000
+                  Turns: 3.00000000
+                  Step Dist: 3.33333333
+                  Axis: X = 0.00000000, Y = 0.00000000, Z = 1.00000000
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found, 1 group
+Select objects: 
+                  CIRCLE    Layer: "0"
+                            Space: Model space
+                   Handle = 4ed
+                   Group = PAIR
+            center point, X=5.00000000  Y=235.00000000  Z=0.00000000
+            radius 2.00000000
+     circumference 12.56637061 
+              area 12.56637061 
+Command: ERASE 
+Select objects: L
+1 found, 1 group
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  LINE      Layer: "0"
+                            Space: Model space
+                   Handle = 4ec
+              from point, X=0.00000000  Y=230.00000000  Z=0.00000000
+                to point, X=10.00000000  Y=230.00000000  Z=0.00000000
+          Length =10.00000000,  Angle in XY Plane =      0
+                  Delta X =10.00000000, Delta Y = 0.00000000, Delta Z =0.00000000
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  TEXT      Layer: "0"
+                            Space: Model space
+                   Handle = 4dd
+             Style = "NOTES"    
+        Annotative: No
+             Typeface = Arial 
+             start point, X=0.00000000  Y=250.00000000  Z=0.00000000
+            height 2.00000000
+              text Styled text
+          rotation angle      0
+             width scale factor 1.20000000
+         obliquing angle     15
+        generation normal
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  CIRCLE    Layer: "REDLAYER"
+                            Space: Model space
+                   Handle = 4cb
+            center point, X=5.00000000  Y=190.00000000  Z=0.00000000
+            radius 3.00000000
+     circumference 18.84955592 
+              area 28.27433388 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  LINE      Layer: "0"
+                            Space: Model space
+                   Color: 200,100,50    Linetype: "BYLAYER"
+                   LineWeight: 0.35 mm
+                   Handle = 4ca
+              from point, X=0.00000000  Y=182.00000000  Z=0.00000000
+                to point, X=10.00000000  Y=182.00000000  Z=0.00000000
+          Length =10.00000000,  Angle in XY Plane =      0
+                  Delta X =10.00000000, Delta Y = 0.00000000, Delta Z =0.00000000
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  LINE      Layer: "0"
+                            Space: Model space
+                   Color: 5 (blue)    Linetype: "BYLAYER"
+                   Handle = 4c9
+              from point, X=0.00000000  Y=180.00000000  Z=0.00000000
+                to point, X=10.00000000  Y=180.00000000  Z=0.00000000
+          Length =10.00000000,  Angle in XY Plane =      0
+                  Delta X =10.00000000, Delta Y = 0.00000000, Delta Z =0.00000000
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  WIPEOUT   Layer: "0"
+                            Space: Model space
+                   Handle = 4b7
+Number of boundary points: 4
+       at point, X=0.00000000,  Y=160.00000000,  Z=0.00000000
+       at point, X=10.00000000,  Y=160.00000000,  Z=0.00000000
+       at point, X=10.00000000,  Y=170.00000000,  Z=0.00000000
+       at point, X=0.00000000,  Y=170.00000000,  Z=0.00000000
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  REGION    Layer: "0"
+                            Space: Model space
+                   Handle = 4a9
+                             Area: 28.27433388 
+                        Perimeter: 18.84955592 
+   Bounding Box: Lower Bound X = 17.00000000, Y = 57.00000000, Z = 0.00000000
+                 Upper Bound X = 23.00000000, Y = 63.00000000, Z = 0.00000000
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  3DSOLID   Layer: "0"
+                            Space: Model space
+                   Handle = 497
+         History = None
+    Show History = No
+      Solid type = Wedge
+         Position, X = 455.00000000 Y = 4.00000000 Z = 0.00000000
+           Length: 10.00000000
+            Width: 8.00000000
+           Height: 6.00000000
+         Rotation: 0
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  3DSOLID   Layer: "0"
+                            Space: Model space
+                   Handle = 486
+         History = None
+    Show History = No
+      Solid type = Torus
+         Position, X = 430.00000000 Y = 5.00000000 Z = 5.00000000
+     Torus radius: 6.00000000
+      Tube radius: 2.00000000
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  3DSOLID   Layer: "0"
+                            Space: Model space
+                   Handle = 475
+         History = None
+    Show History = No
+      Solid type = Cylinder
+         Position, X = 410.00000000 Y = 5.00000000 Z = 0.00000000
+           Radius: 3.00000000
+           Height: 7.00000000
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  3DSOLID   Layer: "0"
+                            Space: Model space
+                   Handle = 471
+         History = None
+    Show History = No
+      Solid type = Cone
+         Position, X = 390.00000000 Y = 5.00000000 Z = 10.00000000
+           Normal: X = 0.00000000 Y = 0.00000000 Z = -1.00000000
+      Base radius: 4.00000000
+       Top radius: 6.00000000
+           Height: 8.00000000
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  3DSOLID   Layer: "0"
+                            Space: Model space
+                   Handle = 46d
+         History = None
+    Show History = No
+      Solid type = Cone
+         Position, X = 370.00000000 Y = 5.00000000 Z = 0.00000000
+      Base radius: 4.00000000
+       Top radius: 2.00000000
+           Height: 8.00000000
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  3DSOLID   Layer: "0"
+                            Space: Model space
+                   Handle = 469
+         History = None
+    Show History = No
+      Solid type = Cone
+         Position, X = 350.00000000 Y = 5.00000000 Z = 0.00000000
+      Base radius: 4.00000000
+       Top radius: 0.00000000
+           Height: 8.00000000
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  3DSOLID   Layer: "0"
+                            Space: Model space
+                   Handle = 458
+         History = None
+    Show History = No
+      Solid type = Sphere
+         Position, X = 330.00000000 Y = 5.00000000 Z = 5.00000000
+           Radius: 4.00000000
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  3DSOLID   Layer: "0"
+                            Space: Model space
+                   Handle = 454
+         History = None
+    Show History = No
+      Solid type = Box
+         Position, X = 305.00000000 Y = 4.00000000 Z = 0.00000000
+           Length: 10.00000000
+            Width: 8.00000000
+           Height: 6.00000000
+         Rotation: 0
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  BLOCK REFERENCE  Layer: "0"
+                            Space: Model space
+                   Handle = 442
+       Block Name: "SYMBOL"
+                at point, X=260.00000000  Y=0.00000000  Z=5.00000000
+   X scale factor: 1.00000000
+   Y scale factor: 1.00000000
+   Z scale factor: 1.00000000
+Extrusion direction relative to UCS:
+                   X=0.00000000  Y=-1.00000000  Z=0.00000000
+         InsUnits: Millimeters
+  Unit conversion: 1.00000000
+  Scale uniformly: No
+  Allow exploding: Yes
+                  ATTRIBUTE  Layer: "0"
+                            Space: Model space
+                   Handle = 444
+             Style = "Standard"    
+        Annotative: No
+             Typeface = Arial 
+             start point, X=258.58578644  Y=0.00000000  Z=6.41421356
+            height 1.00000000
+             value Tilted
+               tag TAG1
+             width scale factor 1.00000000
+         obliquing angle      0
+Extrusion direction relative to UCS:
+                   X=0.00000000  Y=-1.00000000  Z=0.00000000
+             flags normal
+        generation normal
+                  END SEQUENCE  Layer: "0"
+                            Space: Model space
+                   Handle = 443
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  TEXT      Layer: "0"
+                            Space: Model space
+                   Handle = 441
+             Style = "Standard"    
+        Annotative: No
+             Typeface = Arial 
+             start point, X=200.00000000  Y=0.00000000  Z=30.00000000
+            height 2.00000000
+              text Tilted plane
+             width scale factor 1.00000000
+         obliquing angle      0
+Extrusion direction relative to UCS:
+                   X=0.00000000  Y=-1.00000000  Z=0.00000000
+        generation normal
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  LWPOLYLINE  Layer: "0"
+                            Space: Model space
+                   Handle = 440
+            Closed 
+    Constant width 0.00000000
+Extrusion direction relative to UCS:
+                   X=0.00000000  Y=-1.00000000  Z=0.00000000
+              area   107.13495408
+         perimeter   43.66536993 
+          at point  X=240.00000000  Y=0.00000000  Z=5.00000000
+          at point  X=250.00000000  Y=0.00000000  Z=5.00000000
+             bulge 0.41421356
+            center  X=250.00000000  Y=0.00000000  Z=10.00000000
+            radius 5.00000000
+       start angle       270
+         end angle         0
+          at point  X=255.00000000  Y=0.00000000  Z=10.00000000
+          at point  X=240.00000000  Y=0.00000000  Z=15.00000000
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  ARC       Layer: "0"
+                            Space: Model space
+                   Handle = 43f
+            center point, X=220.00000000  Y=0.00000000  Z=10.00000000
+            radius 4.00000000
+Extrusion direction relative to UCS:
+                   X=0.00000000  Y=-1.00000000  Z=0.00000000
+            length 6.98131701
+             total angle    100
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  CIRCLE    Layer: "0"
+                            Space: Model space
+                   Handle = 43e
+            center point, X=200.00000000  Y=0.00000000  Z=10.00000000
+            radius 4.00000000
+Extrusion direction relative to UCS:
+                   X=0.00000000  Y=-1.00000000  Z=0.00000000
+     circumference 25.13274123 
+              area 50.26548246 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  BLOCK REFERENCE  Layer: "0"
+                            Space: Model space
+                   Handle = 42e
+       Block Name: "SYMBOL"
+                at point, X=120.00000000  Y=20.00000000  Z=0.00000000
+   X scale factor: 1.00000000
+   Y scale factor: 1.00000000
+   rotation angle:      0
+   Z scale factor: 1.00000000
+         InsUnits: Millimeters
+  Unit conversion: 1.00000000
+  Scale uniformly: No
+  Allow exploding: Yes
+                  ATTRIBUTE  Layer: "0"
+                            Space: Model space
+                   Handle = 430
+             Style = "Standard"    
+        Annotative: No
+             Typeface = Arial 
+             start point, X=120.00000000  Y=22.00000000  Z=0.00000000
+            height 1.00000000
+             value Grid
+               tag TAG1
+          rotation angle      0
+             width scale factor 1.00000000
+         obliquing angle      0
+             flags normal
+        generation normal
+                  END SEQUENCE  Layer: "0"
+                            Space: Model space
+                   Handle = 42f
+         # columns 3
+    column spacing 10.00000000
+            # rows 2
+       row spacing 8.00000000
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  BLOCK REFERENCE  Layer: "0"
+                            Space: Model space
+                   Handle = 41e
+       Block Name: "SYMBOL"
+                at point, X=140.00000000  Y=0.00000000  Z=0.00000000
+   X scale factor: -1.00000000
+   Y scale factor: 1.00000000
+   rotation angle:      0
+   Z scale factor: 1.00000000
+         InsUnits: Millimeters
+  Unit conversion: 1.00000000
+  Scale uniformly: No
+  Allow exploding: Yes
+                  ATTRIBUTE  Layer: "0"
+                            Space: Model space
+                   Handle = 420
+             Style = "Standard"    
+        Annotative: No
+             Typeface = Arial 
+             start point, X=140.00000000  Y=2.00000000  Z=0.00000000
+            height 1.00000000
+             value Mirrored
+               tag TAG1
+             width scale factor 1.00000000
+         obliquing angle      0
+Extrusion direction relative to UCS:
+                   X=0.00000000  Y=0.00000000  Z=-1.00000000
+             flags normal
+        generation normal
+                  END SEQUENCE  Layer: "0"
+                            Space: Model space
+                   Handle = 41f
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  BLOCK REFERENCE  Layer: "0"
+                            Space: Model space
+                   Handle = 41b
+       Block Name: "SYMBOL"
+                at point, X=130.00000000  Y=0.00000000  Z=0.00000000
+   X scale factor: 2.00000000
+   Y scale factor: 0.50000000
+   rotation angle:     30
+   Z scale factor: 2.00000000
+         InsUnits: Millimeters
+  Unit conversion: 1.00000000
+  Scale uniformly: No
+  Allow exploding: Yes
+                  ATTRIBUTE  Layer: "0"
+                            Space: Model space
+                   Handle = 41d
+             Style = "Standard"    
+        Annotative: No
+             Typeface = Arial 
+             start point, X=129.50000000  Y=0.86602540  Z=0.00000000
+            height 0.50000000
+             value Value B
+               tag TAG1
+          rotation angle     30
+             width scale factor 4.00000000
+         obliquing angle      0
+             flags normal
+        generation normal
+                  END SEQUENCE  Layer: "0"
+                            Space: Model space
+                   Handle = 41c
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  BLOCK REFERENCE  Layer: "0"
+                            Space: Model space
+                   Handle = 418
+       Block Name: "SYMBOL"
+                at point, X=120.00000000  Y=0.00000000  Z=0.00000000
+   X scale factor: 1.00000000
+   Y scale factor: 1.00000000
+   rotation angle:      0
+   Z scale factor: 1.00000000
+         InsUnits: Millimeters
+  Unit conversion: 1.00000000
+  Scale uniformly: No
+  Allow exploding: Yes
+                  ATTRIBUTE  Layer: "0"
+                            Space: Model space
+                   Handle = 41a
+             Style = "Standard"    
+        Annotative: No
+             Typeface = Arial 
+             start point, X=120.00000000  Y=2.00000000  Z=0.00000000
+            height 1.00000000
+             value Value A
+               tag TAG1
+          rotation angle      0
+             width scale factor 1.00000000
+         obliquing angle      0
+             flags normal
+        generation normal
+                  END SEQUENCE  Layer: "0"
+                            Space: Model space
+                   Handle = 419
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  POLYLINE  Layer: "0"
+                            Space: Model space
+                   Handle = 3fe
+   Polyface mesh
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 3ff
+   Polyface vertex
+                at point, X=20.00000000  Y=140.00000000  Z=0.00000000
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 400
+   Polyface vertex
+                at point, X=30.00000000  Y=140.00000000  Z=0.00000000
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 401
+   Polyface vertex
+                at point, X=30.00000000  Y=150.00000000  Z=0.00000000
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 402
+   Polyface vertex
+                at point, X=20.00000000  Y=150.00000000  Z=0.00000000
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 403
+   Polyface vertex
+                at point, X=25.00000000  Y=145.00000000  Z=6.00000000
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 404
+   Polyface vertex
+                at point, X=24.82483080  Y=144.01628685  Z=5.95969885
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 405
+   Polyface vertex
+                at point, X=24.47449241  Y=142.04886054  Z=5.87909655
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 406
+   Polyface vertex
+                at point, X=23.59864643  Y=137.13029477  Z=5.67759080
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 407
+Polyface face record
+    Face vertices:  2 3 5
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 408
+Polyface face record
+    Face vertices:  3 4 5
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 409
+Polyface face record
+    Face vertices:  4 1 5
+                  END SEQUENCE  Layer: "0"
+                            Space: Model space
+                   Handle = 40a
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  POLYLINE  Layer: "0"
+                            Space: Model space
+                   Handle = 3e6
+                   3x3 mesh
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 3e7
+              Mesh
+                at point, X=0.00000000  Y=140.00000000  Z=0.00000000
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 3e8
+              Mesh
+                at point, X=5.00000000  Y=140.00000000  Z=1.00000000
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 3e9
+              Mesh
+                at point, X=10.00000000  Y=140.00000000  Z=0.00000000
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 3ea
+              Mesh
+                at point, X=0.00000000  Y=145.00000000  Z=1.00000000
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 3eb
+              Mesh
+                at point, X=5.00000000  Y=145.00000000  Z=3.00000000
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 3ec
+              Mesh
+                at point, X=10.00000000  Y=145.00000000  Z=1.00000000
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 3ed
+              Mesh
+                at point, X=0.00000000  Y=150.00000000  Z=0.00000000
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 3ee
+              Mesh
+                at point, X=5.00000000  Y=150.00000000  Z=1.00000000
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 3ef
+              Mesh
+                at point, X=10.00000000  Y=150.00000000  Z=0.00000000
+                  END SEQUENCE  Layer: "0"
+                            Space: Model space
+                   Handle = 3f0
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  HATCH     Layer: "0"
+                            Space: Model space
+                   Handle = 3d8
+                 Hatch pattern ANSI31 
+                 Annotative: No
+                 Hatch scale 1.00000000
+                 Hatch angle      0
+                 Associative
+                 Area      139.26990817
+                 Origin    X=0.00000000  Y=0.00000000  Z=0.00000000
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Hatch boundary associativity removed.
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  LWPOLYLINE  Layer: "0"
+                            Space: Model space
+                   Handle = 3d7
+            Closed 
+    Constant width 0.00000000
+              area   139.26990817
+         perimeter   45.70796327 
+          at point  X=80.00000000  Y=30.00000000  Z=0.00000000
+          at point  X=90.00000000  Y=30.00000000  Z=0.00000000
+             bulge 1.00000000
+            center  X=90.00000000  Y=35.00000000  Z=0.00000000
+            radius 5.00000000
+       start angle       270
+         end angle        90
+          at point  X=90.00000000  Y=40.00000000  Z=0.00000000
+          at point  X=80.00000000  Y=40.00000000  Z=0.00000000
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  HATCH     Layer: "0"
+                            Space: Model space
+                   Handle = 3c8
+                 Hatch pattern SOLID 
+                 Associative
+                 Area      100.00000000
+                 Origin    X=0.00000000  Y=0.00000000  Z=0.00000000
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Hatch boundary associativity removed.
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  LWPOLYLINE  Layer: "0"
+                            Space: Model space
+                   Handle = 3c5
+            Closed 
+    Constant width 0.00000000
+              area   100.00000000
+         perimeter   40.00000000 
+          at point  X=60.00000000  Y=30.00000000  Z=0.00000000
+          at point  X=70.00000000  Y=30.00000000  Z=0.00000000
+          at point  X=70.00000000  Y=40.00000000  Z=0.00000000
+          at point  X=60.00000000  Y=40.00000000  Z=0.00000000
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  MTEXT     Layer: "0"
+                            Space: Model space
+                   Handle = 3b7
+             Style = "Standard"    
+        Annotative: No
+Location:        X=12.09000000  Y=130.00000000  Z=0.00000000
+Width:           0.00000000
+Normal:          X=0.00000000  Y=0.00000000  Z=1.00000000
+Rotation:                0
+Text height:     0.18000000
+Line spacing:    Multiple (1x = 0.30000000)
+Attachment:      MiddleLeft
+Flow direction:  LtoR
+Contents:        \A1;Leader note
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  LEADER    Layer: "0"
+                            Space: Model space
+                   Handle = 3b6
+associative: no
+Normal:               X=0.00000000  Y=0.00000000  Z=1.00000000
+Horizontal direction: X=1.00000000  Y=0.00000000  Z=0.00000000
+Vertex:        X=0.00000000  Y=125.00000000  Z=0.00000000
+Vertex:        X=5.00000000  Y=130.00000000  Z=0.00000000
+Vertex:        X=12.00000000  Y=130.00000000  Z=0.00000000
+Hook Line: Off
+Arrow:     On
+Path type: Straight
+dimension style: "Standard"
+        Annotative: No
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  DIMENSION  Layer: "0"
+                            Space: Model space
+                   Handle = 39e
+associative: no
+type: X ordinate
+feature      defining point: X=60.00000000  Y=0.00000000  Z=0.00000000
+leader       defining point: X=62.00000000  Y=-6.00000000  Z=0.00000000
+feature UCS  defining point: X=0.00000000  Y=0.00000000  Z=0.00000000
+default text position: X=62.00000000  Y=-6.53373806  Z=0.00000000
+default text
+dimension style: "Standard"
+Annotative: No
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  DIMENSION  Layer: "0"
+                            Space: Model space
+                   Handle = 382
+associative: no
+type: arc
+1st extension defining point: X=45.00000000  Y=0.00000000  Z=0.00000000
+2nd extension defining point: X=40.00000000  Y=5.00000000  Z=0.00000000
+arc center    defining point: X=40.00000000  Y=0.00000000  Z=0.00000000
+dimension arc defining point: X=46.98212002  Y=4.03112887  Z=0.00000000
+default text position: X=45.70087713  Y=5.70087713  Z=0.00000000
+default text
+dimension style: "Standard"
+Annotative: No
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  DIMENSION  Layer: "0"
+                            Space: Model space
+                   Handle = 35f
+associative: yes
+type: diameter
+       defining point: X=15.52786405  Y=2.23606798  Z=0.00000000
+defining point:        X=24.47213595  Y=-2.23606798  Z=0.00000000
+user specified text position: X=30.81116644  Y=-5.00000000  Z=0.00000000
+default text
+dimension style: "Standard"
+dimension style overrides:
+ DIMUPT      On                  
+Annotative: No
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  DIMENSION  Layer: "0"
+                            Space: Model space
+                   Handle = 349
+associative: yes
+type: radial
+center defining point: X=20.00000000  Y=0.00000000  Z=0.00000000
+defining point:        X=24.47213595  Y=2.23606798  Z=0.00000000
+user specified text position: X=30.72945430  Y=5.00000000  Z=0.00000000
+default text
+dimension style: "Standard"
+dimension style overrides:
+ DIMUPT      On                  
+Annotative: No
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  DIMENSION  Layer: "0"
+                            Space: Model space
+                   Handle = 32d
+associative: no
+type: aligned
+1st extension  defining point: X=0.00000000  Y=0.00000000  Z=0.00000000
+2nd extension  defining point: X=10.00000000  Y=5.00000000  Z=0.00000000
+dimension line defining point: X=8.00000000  Y=9.00000000  Z=0.00000000
+default text position: X=3.00000000  Y=6.50000000  Z=0.00000000
+default text
+dimension style: "Standard"
+Annotative: No
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  DIMENSION  Layer: "0"
+                            Space: Model space
+                   Handle = 31e
+associative: no
+type: horizontal
+1st extension  defining point: X=0.00000000  Y=0.00000000  Z=0.00000000
+2nd extension  defining point: X=10.00000000  Y=0.00000000  Z=0.00000000
+dimension line defining point: X=10.00000000  Y=-5.00000000  Z=0.00000000
+default text position: X=5.00000000  Y=-5.00000000  Z=0.00000000
+default text
+dimension style: "Standard"
+Annotative: No
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  MTEXT     Layer: "0"
+                            Space: Model space
+                   Handle = 30e
+             Style = "Standard"    
+        Annotative: No
+Location:        X=0.00000000  Y=115.00000000  Z=0.00000000
+Width:           40.00000000
+Normal:          X=0.00000000  Y=0.00000000  Z=1.00000000
+Rotation:                0
+Text height:     2.50000000
+Line spacing:    Multiple (1x = 4.16666667)
+Attachment:      TopLeft
+Flow direction:  ByStyle
+Contents:        First line\PSecond {\fArial|b1;bold} line
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  TEXT      Layer: "0"
+                            Space: Model space
+                   Handle = 302
+             Style = "Standard"    
+        Annotative: No
+             Typeface = Arial 
+               mid point, X=40.00000000  Y=100.00000000  Z=0.00000000
+            height 2.50000000
+              text Centered text
+          rotation angle     30
+             width scale factor 1.00000000
+         obliquing angle      0
+        generation normal
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  TEXT      Layer: "0"
+                            Space: Model space
+                   Handle = 301
+             Style = "Standard"    
+        Annotative: No
+             Typeface = Arial 
+             start point, X=0.00000000  Y=100.00000000  Z=0.00000000
+            height 2.50000000
+              text Hello DWG
+          rotation angle      0
+             width scale factor 1.00000000
+         obliquing angle      0
+        generation normal
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  XLINE     Layer: "0"
+                            Space: Model space
+                   Handle = 2f5
+                   base point, X=0.00000000  Y=95.00000000  Z=0.00000000
+                   unit direction, X=0.70710678  Y=0.70710678  Z=0.00000000
+                   angle in XY plane =        45
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  RAY       Layer: "0"
+                            Space: Model space
+                   Handle = 2f4
+                   base point, X=0.00000000  Y=90.00000000  Z=0.00000000
+                   unit direction, X=0.70710678  Y=0.70710678  Z=0.00000000
+                   angle in XY plane =        45
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  3D FACE   Layer: "0"
+                            Space: Model space
+                   Handle = 2e8
+             first point, X=50.00000000  Y=45.00000000  Z=0.00000000
+            second point, X=60.00000000  Y=45.00000000  Z=0.00000000
+             third point, X=60.00000000  Y=55.00000000  Z=5.00000000
+            fourth point, X=50.00000000  Y=55.00000000  Z=5.00000000
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  SOLID     Layer: "0"
+                            Space: Model space
+                   Handle = 2dc
+              from point, X=30.00000000  Y=30.00000000  Z=0.00000000
+               and point, X=40.00000000  Y=30.00000000  Z=0.00000000
+                to point, X=30.00000000  Y=40.00000000  Z=0.00000000
+               and point, X=40.00000000  Y=40.00000000  Z=0.00000000
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  SPLINE    Layer: "0"
+                            Space: Model space
+                   Handle = 2d0
+                           Length: 29.53576560 
+                            Order: 4
+                       Properties: Planar, Non-Rational, Non-Periodic
+                 Parametric Range: Start0.00000000
+                                     End28.28427125 
+         Number of control points: 7
+                   Control Points: X = 0.00000000, Y = 70.00000000, Z = 0.00000000
+                                   X = 1.66666667, Y = 72.85714286, Z = 0.00000000
+                                   X = 5.00000000, Y = 78.57142857, Z = 0.00000000
+                                   X = 10.00000000, Y = 65.71428571, Z = 0.00000000
+                                   X = 15.00000000, Y = 78.57142857, Z = 0.00000000
+                                   X = 18.33333333, Y = 72.85714286, Z = 0.00000000
+                                   X = 20.00000000, Y = 70.00000000, Z = 0.00000000
+             Number of fit points: 5
+                        User Data: Fit Points
+                                   X = 0.00000000, Y = 70.00000000, Z = 0.00000000
+                                   X = 5.00000000, Y = 75.00000000, Z = 0.00000000
+                                   X = 10.00000000, Y = 70.00000000, Z = 0.00000000
+                                   X = 15.00000000, Y = 75.00000000, Z = 0.00000000
+                                   X = 20.00000000, Y = 70.00000000, Z = 0.00000000
+              Fit point tolerance: 1.00000000E-10
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  POLYLINE  Layer: "0"
+                            Space: Model space
+                   Handle = 2c0
+            Closed space
+              area 55.90169944
+         perimeter 36.18033989
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 2c2
+             Space
+                at point, X=0.00000000  Y=50.00000000  Z=0.00000000
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 2c3
+             Space
+                at point, X=10.00000000  Y=50.00000000  Z=5.00000000
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 2c4
+             Space
+                at point, X=10.00000000  Y=60.00000000  Z=5.00000000
+                  END SEQUENCE  Layer: "0"
+                            Space: Model space
+                   Handle = 2c1
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  POLYLINE  Layer: "0"
+                            Space: Model space
+                   Handle = 2af
+              Open
+    starting width 0.00000000
+      ending width 0.00000000
+              area 48.18680395
+            length 31.15805071
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 2b1
+                at point, X=0.00000000  Y=45.00000000  Z=0.00000000
+    starting width 0.00000000
+      ending width 0.00000000
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 2b2
+                at point, X=10.00000000  Y=45.00000000  Z=0.00000000
+    starting width 0.00000000
+      ending width 0.00000000
+             bulge 0.27698396
+            center X=10.00000000  Y=50.66666667  Z=0.00000000
+            radius 5.66666667
+       start angle    270
+         end angle    332
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 2b3
+                at point, X=15.00000000  Y=48.00000000  Z=0.00000000
+    starting width 0.00000000
+      ending width 0.00000000
+                  VERTEX    Layer: "0"
+                            Space: Model space
+                   Handle = 2b4
+                at point, X=0.00000000  Y=49.00000000  Z=0.00000000
+    starting width 0.00000000
+      ending width 0.00000000
+                  END SEQUENCE  Layer: "0"
+                            Space: Model space
+                   Handle = 2b0
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  LWPOLYLINE  Layer: "0"
+                            Space: Model space
+                   Handle = 2a3
+              Open 
+              area   25.00000000
+            length   15.00000000 
+          at point  X=20.00000000  Y=30.00000000  Z=0.00000000
+    starting width 0.50000000
+      ending width 1.00000000
+          at point  X=30.00000000  Y=30.00000000  Z=0.00000000
+    starting width 1.00000000
+      ending width 1.00000000
+          at point  X=30.00000000  Y=35.00000000  Z=0.00000000
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  LWPOLYLINE  Layer: "0"
+                            Space: Model space
+                   Handle = 2a2
+            Closed 
+    Constant width 0.00000000
+              area   107.13495408
+         perimeter   43.66536993 
+          at point  X=0.00000000  Y=30.00000000  Z=0.00000000
+          at point  X=10.00000000  Y=30.00000000  Z=0.00000000
+             bulge 0.41421356
+            center  X=10.00000000  Y=35.00000000  Z=0.00000000
+            radius 5.00000000
+       start angle       270
+         end angle         0
+          at point  X=15.00000000  Y=35.00000000  Z=0.00000000
+          at point  X=0.00000000  Y=40.00000000  Z=0.00000000
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  POINT     Layer: "0"
+                            Space: Model space
+                   Handle = 296
+                at point, X=5.00000000  Y=20.00000000  Z=0.00000000
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  ELLIPSE   Layer: "0"
+                            Space: Model space
+                   Handle = 295
+                           Length: 12.67217417 
+                           Center: X = 80.00000000, Y = 0.00000000, Z = 0.00000000
+                       Major Axis: X = 10.00000000, Y = 0.00000000, Z = 0.00000000
+                       Minor Axis: X = 0.00000000, Y = 3.00000000, Z = 0.00000000
+                      Start Point: X = 90.00000000, Y = 0.00000000, Z = 0.00000000
+                        End Point: X = 78.29335963, Y = 2.95598783, Z = 0.00000000
+                      Start Angle: 0         
+                        End Angle: 120       
+                     Radius Ratio: 0.30000000 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  ELLIPSE   Layer: "0"
+                            Space: Model space
+                   Handle = 294
+                             Area: 94.24777961
+                    Circumference: 43.85910070 
+                           Center: X = 60.00000000, Y = 0.00000000, Z = 0.00000000
+                       Major Axis: X = 10.00000000, Y = 0.00000000, Z = 0.00000000
+                       Minor Axis: X = 0.00000000, Y = 3.00000000, Z = 0.00000000
+                     Radius Ratio: 0.30000000 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  ARC       Layer: "0"
+                            Space: Model space
+                   Handle = 293
+            center point, X=40.00000000  Y=0.00000000  Z=0.00000000
+            radius 5.00000000
+             start angle      0
+               end angle    135
+            length 11.78097245
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  CIRCLE    Layer: "0"
+                            Space: Model space
+                   Handle = 292
+            center point, X=20.00000000  Y=0.00000000  Z=0.00000000
+            radius 5.00000000
+     circumference 31.41592654 
+              area 78.53981634 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+1 found
+Select objects: 
+                  LINE      Layer: "0"
+                            Space: Model space
+                   Handle = 291
+              from point, X=0.00000000  Y=0.00000000  Z=0.00000000
+                to point, X=10.00000000  Y=5.00000000  Z=2.00000000
+          In Current UCS, Length =11.18033989,  Angle in XY Plane =     27
+                  3D Length  =11.35781669,  Angle from XY Plane =     10
+                  Delta X =10.00000000, Delta Y = 5.00000000, Delta Z =2.00000000
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: LIST 
+Select objects: L
+0 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+0 found
+Select objects: 
+Command: QUIT 
+Really want to discard all changes to drawing? <N> YLogFilePath has been restored to ''.
+
+=== ONE AT A TIME ===
+Attribute Qt::AA_PluginApplication must be set before QCoreApplication is created.
+AcCoreConsole: StdOutConsoleMode: processed-output: enabled,auto
+AutoCAD Core Engine Console - Copyright 2026 Autodesk, Inc.  All rights reserved. (X.60.M.171)
+
+Execution Path:
+
+Version Number: X.60.M.171 (UNICODE)
+LogFilePath has been set to the working folder.
+.
+Loading Modeler DLLs.
+Regenerating model.
+Command: 
+Command: 
+Command: 
+Command: FILEDIA 
+Enter new value for FILEDIA <0>: 0
+Command: QAFLAGS 
+Enter new value for QAFLAGS <2>: 2
+Command: LUPREC 
+Enter new value for LUPREC <4>: 8
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found, 1 group
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: AREA
+Select objects: L
+Area = 28.27433388, Trimmed area = 0.00000000 , Perimeter = 18.84955592 
+Command: MASSPROP 
+Select objects: L
+1 found
+Select objects: 
+ ----------------   REGIONS   ---------------- 
+Area:                    28.27433388 
+Perimeter:               18.84955592 
+Bounding box:         X: 17.00000000  --  23.00000000 
+                      Y: 57.00000000  --  63.00000000 
+Centroid:             X: 20.00000000 
+                      Y: 60.00000000 
+Moments of inertia:   X: 101851.21922754  
+                      Y: 11373.35080416  
+Product of inertia:  XY: -33929.20065877  
+Radii of gyration:    X: 60.01874707 
+                      Y: 20.05617112 
+Principal moments and X-Y directions about centroid:
+                      I: 63.61725124 along [1.00000000 0.00000000]
+                      J: 63.61725124 along [0.00000000 1.00000000]
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: AREA
+Select objects: L
+Area = 281.29523032, Perimeter = 0.00000000 
+Command: MASSPROP 
+Select objects: L
+1 found
+Select objects: 
+ ----------------   SOLIDS    ---------------- 
+Mass:                    240.00000000 
+Volume:                  240.00000000 
+Bounding box:         X: 450.00000000  --  460.00000000 
+                      Y: 0.00000000  --  8.00000000 
+                      Z: 0.00000000  --  6.00000000 
+Centroid:             X: 453.33333333 
+                      Y: 4.00000000 
+                      Z: 2.00000000 
+Moments of inertia:   X: 6560.00000000  
+                      Y: 4.93254400E+07  
+                      Z: 4.93291200E+07  
+Products of inertia: XY: -435200.00000000  
+                     YZ: -1920.00000000  
+                     ZX: -217200.00000000  
+Radii of gyration:    X: 5.22812905 
+                      Y: 453.34607825 
+                      Z: 453.36298923 
+Principal moments and X-Y-Z directions about centroid:
+                      I: 1601.82100801 along [0.92992935 0.00000000 -0.36773822]
+                      J: 1813.33333334 along [0.00000000 1.00000000 0.00000000]
+                      K: 2771.51232532 along [0.36773822 0.00000000 0.92992935]
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: AREA
+Select objects: L
+Area = 473.74101125, Perimeter = 0.00000000 
+Command: MASSPROP 
+Select objects: L
+1 found
+Select objects: 
+ ----------------   SOLIDS    ---------------- 
+Mass:                    473.74101125 
+Volume:                  473.74101125 
+Bounding box:         X: 422.00000000  --  438.00000000 
+                      Y: -3.00000000  --  13.00000000 
+                      Z: 3.00000000  --  7.00000000 
+Centroid:             X: 430.00000000 
+                      Y: 5.00000000 
+                      Z: 5.00000000 
+Moments of inertia:   X: 33398.74129329  
+                      Y: 8.76162682E+07  
+                      Z: 8.76250324E+07  
+Products of inertia: XY: -1.01854317E+06  
+                     YZ: -11843.52528131  
+                     ZX: -1.01854317E+06  
+Radii of gyration:    X: 8.39642781 
+                      Y: 430.05290372 
+                      Z: 430.07441217 
+Principal moments and X-Y-Z directions about centroid:
+                      I: 9711.69073067 along [1.00000000 0.00000000 0.00000000]
+                      J: 9711.69073068 along [0.00000000 1.00000000 0.00000000]
+                      K: 18475.89943884 along [0.00000000 0.00000000 1.00000000]
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: AREA
+Select objects: L
+Area = 188.49555922, Perimeter = 0.00000000 
+Command: MASSPROP 
+Select objects: L
+1 found
+Select objects: 
+ ----------------   SOLIDS    ---------------- 
+Mass:                    197.92033718 
+Volume:                  197.92033718 
+Bounding box:         X: 407.00000000  --  413.00000000 
+                      Y: 2.00000000  --  8.00000000 
+                      Z: 0.00000000  --  7.00000000 
+Centroid:             X: 410.00000000 
+                      Y: 5.00000000 
+                      Z: 3.50000000 
+Moments of inertia:   X: 8626.02804297  
+                      Y: 3.32740867E+07  
+                      Z: 3.32762473E+07  
+Products of inertia: XY: -405736.69121142  
+                     YZ: -3463.60590058  
+                     ZX: -284015.68384810  
+Radii of gyration:    X: 6.60176745 
+                      Y: 410.02266198 
+                      Z: 410.03597403 
+Principal moments and X-Y-Z directions about centroid:
+                      I: 1253.49548316 along [1.00000000 0.00000000 0.00000000]
+                      J: 1253.49542566 along [0.00000000 1.00000000 0.00000000]
+                      K: 890.64148854 along [0.00000000 0.00000000 1.00000000]
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: AREA
+Select objects: L
+Area = 422.42518485, Perimeter = 0.00000000 
+Command: MASSPROP 
+Select objects: L
+1 found
+Select objects: 
+ ----------------   SOLIDS    ---------------- 
+Mass:                    636.69611113 
+Volume:                  636.69611113 
+Bounding box:         X: 384.00000000  --  396.00000000 
+                      Y: -1.00000000  --  11.00000000 
+                      Z: 2.00000000  --  10.00000000 
+Centroid:             X: 390.00000000 
+                      Y: 5.00000000 
+                      Z: 5.47368421 
+Moments of inertia:   X: 42491.08783735  
+                      Y: 9.68680522E+07  
+                      Z: 9.68658807E+07  
+Products of inertia: XY: -1.24155742E+06  
+                     YZ: -17425.36725191  
+                     ZX: -1.35917865E+06  
+Radii of gyration:    X: 8.16926203 
+                      Y: 390.05350510 
+                      Z: 390.04913321 
+Principal moments and X-Y-Z directions about centroid:
+                      I: 7497.49354128 along [1.00000000 0.00000000 0.00000000]
+                      J: 7497.49354127 along [0.00000000 1.00000000 0.00000000]
+                      K: 8484.81343882 along [0.00000000 0.00000000 1.00000000]
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: AREA
+Select objects: L
+Area = 218.26927319, Perimeter = 0.00000000 
+Command: MASSPROP 
+Select objects: L
+1 found
+Select objects: 
+ ----------------   SOLIDS    ---------------- 
+Mass:                    234.57225147 
+Volume:                  234.57225147 
+Bounding box:         X: 366.00000000  --  374.00000000 
+                      Y: 1.00000000  --  9.00000000 
+                      Z: 0.00000000  --  8.00000000 
+Centroid:             X: 370.00000000 
+                      Y: 5.00000000 
+                      Z: 3.14285714 
+Moments of inertia:   X: 9919.05521349  
+                      Y: 3.21169960E+07  
+                      Z: 3.21200521E+07  
+Products of inertia: XY: -433958.66521608  
+                     YZ: -3686.13538021  
+                     ZX: -272774.01813592  
+Radii of gyration:    X: 6.50274668 
+                      Y: 370.02335834 
+                      Z: 370.04096298 
+Principal moments and X-Y-Z directions about centroid:
+                      I: 1737.74954495 along [1.00000000 0.00000000 0.00000000]
+                      J: 1737.74951070 along [0.00000000 1.00000000 0.00000000]
+                      K: 1246.58394782 along [0.00000000 0.00000000 1.00000000]
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: AREA
+Select objects: L
+Area = 162.66251815, Perimeter = 0.00000000 
+Command: MASSPROP 
+Select objects: L
+1 found
+Select objects: 
+ ----------------   SOLIDS    ---------------- 
+Mass:                    134.04128655 
+Volume:                  134.04128655 
+Bounding box:         X: 346.00000000  --  354.00000000 
+                      Y: 1.00000000  --  9.00000000 
+                      Z: 0.00000000  --  8.00000000 
+Centroid:             X: 350.00000000 
+                      Y: 5.00000000 
+                      Z: 2.00000000 
+Moments of inertia:   X: 4530.59548550  
+                      Y: 1.64212372E+07  
+                      Z: 1.64240520E+07  
+Products of inertia: XY: -234572.25146804  
+                     YZ: -1340.41286553  
+                     ZX: -93828.90058722  
+Radii of gyration:    X: 5.81377674 
+                      Y: 350.01257120 
+                      Z: 350.04256884 
+Principal moments and X-Y-Z directions about centroid:
+                      I: 643.39817546 along [1.00000000 0.00000000 0.00000000]
+                      J: 643.39817546 along [0.00000000 1.00000000 0.00000000]
+                      K: 643.39817546 along [0.00000000 0.00000000 1.00000000]
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: AREA
+Select objects: L
+Area = 201.06192983, Perimeter = 0.00000000 
+Command: MASSPROP 
+Select objects: L
+1 found
+Select objects: 
+ ----------------   SOLIDS    ---------------- 
+Mass:                    268.08257311 
+Volume:                  268.08257311 
+Bounding box:         X: 326.00000000  --  334.00000000 
+                      Y: 1.00000000  --  9.00000000 
+                      Z: 1.00000000  --  9.00000000 
+Centroid:             X: 330.00000000 
+                      Y: 5.00000000 
+                      Z: 5.00000000 
+Moments of inertia:   X: 15119.85712320  
+                      Y: 2.92026100E+07  
+                      Z: 2.92026100E+07  
+Products of inertia: XY: -442336.24562544  
+                     YZ: -6702.06432766  
+                     ZX: -442336.24562544  
+Radii of gyration:    X: 7.50999334 
+                      Y: 330.04757233 
+                      Z: 330.04757233 
+Principal moments and X-Y-Z directions about centroid:
+                      I: 1715.72846788 along [1.00000000 0.00000000 0.00000000]
+                      J: 1715.72846787 along [0.00000000 1.00000000 0.00000000]
+                      K: 1715.72846787 along [0.00000000 0.00000000 1.00000000]
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: AREA
+Select objects: L
+Area = 376.00000000, Perimeter = 0.00000000 
+Command: MASSPROP 
+Select objects: L
+1 found
+Select objects: 
+ ----------------   SOLIDS    ---------------- 
+Mass:                    480.00000000 
+Volume:                  480.00000000 
+Bounding box:         X: 300.00000000  --  310.00000000 
+                      Y: 0.00000000  --  8.00000000 
+                      Z: 0.00000000  --  6.00000000 
+Centroid:             X: 305.00000000 
+                      Y: 4.00000000 
+                      Z: 3.00000000 
+Moments of inertia:   X: 16000.00000000  
+                      Y: 4.46617600E+07  
+                      Z: 4.46662400E+07  
+Products of inertia: XY: -585600.00000000  
+                     YZ: -5760.00000000  
+                     ZX: -439200.00000000  
+Radii of gyration:    X: 5.77350269 
+                      Y: 305.03333151 
+                      Z: 305.04863000 
+Principal moments and X-Y-Z directions about centroid:
+                      I: 4000.00000000 along [1.00000000 0.00000000 0.00000000]
+                      J: 5440.00000000 along [0.00000000 1.00000000 0.00000000]
+                      K: 6560.00000000 along [0.00000000 0.00000000 1.00000000]
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Hatch boundary associativity removed.
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Hatch boundary associativity removed.
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: ERASE 
+Select objects: L
+1 found
+Select objects: 
+Command: QUIT 
+Really want to discard all changes to drawing? <N> YLogFilePath has been restored to ''.
