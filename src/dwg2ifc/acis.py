@@ -134,17 +134,48 @@ def _spline(tokens: list, start: int, surface: bool):
         elif depth == 1 and token in ("nubs", "nurbs") and i + 4 < len(tokens):
             ahead = tokens[i + 1 : i + 5]
             closure = lambda t: isinstance(t, Enum) or t in ("open", "closed", "periodic")  # noqa: E731
-            is_surface = isinstance(ahead[1], float) and closure(ahead[2])
+            # a surface has two degrees; a rational one then says in which directions ("both", "u", "v")
+            is_surface = isinstance(ahead[1], float) and (closure(ahead[2]) or ahead[2] in ("both", "u", "v"))
             is_curve = closure(ahead[1]) and isinstance(ahead[2], float)
             if (surface and is_surface) or (not surface and is_curve and not is_surface):
-                return _read_spline(tokens, i, surface)
+                try:
+                    return _read_spline(tokens, i, surface)
+                except ValueError:
+                    # a curve in a surface's own 2D coordinates: the block gives its 3D curve only as a recipe
+                    # shortcut: such an edge is left out (its faces are reported), evaluate the recipe to keep them
+                    pass
         i += 1
     return None
+
+
+def _extruded(tokens: list, start: int):
+    """An extrusion surface ("cyl_spl_sur") saved without its B-spline: built from the curve and direction it stores."""
+    try:
+        inner = tokens.index("{", start + 1)
+        curve = _spline(tokens, inner, False)
+        depth, end = 0, inner
+        while True:  # the brace that closes the curve's block
+            depth += {"{": 1, "}": -1}.get(tokens[end], 0) if isinstance(tokens[end], str) else 0
+            if depth == 0:
+                break
+            end += 1
+        rest = [t for t in tokens[end + 1 : end + 24] if not isinstance(t, (bool, Enum))]
+        direction, numbers = rest[:3], [t for t in rest[6:] if isinstance(t, float)]
+        low, high = numbers[2], numbers[3]  # the ranges follow as u low, u high, v low, v high
+    except (ValueError, IndexError):
+        return None
+    if curve is None or len(curve) != 5 or not all(isinstance(c, float) for c in direction) or high <= low:
+        return None
+    _, degree, knots, counts, control = curve
+    along = lambda p, v: (*(p[i] + v * direction[i] for i in range(3)), *p[3:])  # noqa: E731
+    return ("bspline", degree, 1, knots, counts, [low, high], [1, 1], [[along(p, low), along(p, high)] for p in control])
 
 
 def _read_spline(tokens: list, i: int, surface: bool):
     size = 4 if tokens[i] == "nurbs" else 3
     i += 1
+    if surface and tokens[i + 2] in ("both", "u", "v"):
+        del (tokens := list(tokens))[i + 2]  # read on as for a plain surface; every point carries its weight
 
     def knots(count):
         nonlocal i
@@ -219,7 +250,10 @@ class _File:
                 r, at = self.subtypes[number]
                 tokens = self.records[r]
             else:
-                return reverse, _spline(tokens, at, surface)
+                found = _spline(tokens, at, surface)
+                if found is None and surface and tokens[at + 1] == "cyl_spl_sur":
+                    found = _extruded(tokens, at)
+                return reverse, found
         return reverse, None
 
     # geometry is returned in world coordinates: the body transform is applied here

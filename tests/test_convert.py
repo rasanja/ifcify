@@ -132,11 +132,14 @@ def test_title_block_drawings_export_their_layouts():
 
 
 def test_no_sample_reports_unconverted_drawing_entities():
-    # across all samples only lights (nothing to draw) and things AutoCAD itself would not show in the model
-    allowed = {"LIGHT", "on a layer that is off or frozen", "marked invisible", "on a paper-space layout"}
+    # across all samples only things AutoCAD itself would not show in the model
+    allowed = {"on a layer that is off or frozen", "marked invisible", "on a paper-space layout"}
+    # known gaps, by file: two corner blends ("VBL_SURF") stored as a recipe with no surface to read
+    known = {"visualization_-_condominium_with_skylight.dwg": {"3DSOLID face (unsupported geometry)": 2}}
     for sample in ASSETS.glob("*.dwg"):
         skipped = convert(sample.read_bytes())[1]
-        assert set(skipped) <= allowed, sample.name
+        extra = {reason: count for reason, count in skipped.items() if reason not in allowed}
+        assert extra == known.get(sample.name, {}), sample.name
 
 
 def test_floor_plan_rooms_become_spaces():
@@ -204,3 +207,22 @@ def test_groups_fonts_and_attached_records_reach_the_ifc():
     model = ifcopenshell.file.from_string(convert((ASSETS / "building001-0_floor1.dwg").read_bytes())[0])
     tagged = [p for p in model.by_type("IfcPropertySet") if p.Name == "DWG_Record_Planon_Space"]
     assert len(tagged) >= 70 and "1000=Space" in tagged[0].HasProperties[0].NominalValue.wrappedValue
+
+
+def test_solids_saved_without_a_ready_made_surface():
+    """ACIS 21500: rational surfaces of revolution, and extrusions stored as a curve and a direction."""
+    sample = ASSETS / "visualization_-_condominium_with_skylight.dwg"
+    if not sample.exists():
+        pytest.skip("sample not present")
+    drawing = entities.load(sample.read_bytes())
+    assert not any("unreadable" in reason for reason in drawing.skipped)
+    surfaces = [f["surface"] for e in drawing.entities for b in e.get("bodies") or () for f in b["faces"]]
+    # still without a surface: two corner blends, and two offsets of an extrusion in blocks the drawing never places
+    assert sum(1 for s in surfaces if s is None) == 4
+    rational = [s for s in surfaces if s and s[0] == "bspline" and len(s[7][0][0]) == 4]
+    assert len(rational) == 10 and all(0 < p[3] <= 1 for s in rational for row in s[7] for p in row)
+    # an extrusion: two rows of control points, the second the first moved along x by the stored length
+    extruded = [s for s in surfaces if s and s[0] == "bspline" and s[2] == 1 and s[5] == [0.0, 2.9363615069628164]]
+    assert len(extruded) >= 2
+    for low, high in extruded[0][7]:
+        assert (high[1], high[2]) == (low[1], low[2]) and high[0] - low[0] == pytest.approx(2.9363615069628164)
