@@ -446,14 +446,18 @@ def _block_header(o: dwg.Obj) -> dict:
     if since(o.release, "R2004") and not is_xref and not overlaid:
         r.bl()  # owned object count
     base = r.bd3()
-    o.text()  # xref path
+    path = o.text()
+    xref = path if is_xref or overlaid else ""  # the file an external reference block stands for
+    layout = 0
     if since(o.release, "R2000"):
         while r.rc():  # one non-zero byte per insert, zero-terminated
             pass
         o.text()  # description
         preview_size = r.bl()
         r.p += preview_size * 8
-    return {"name": name, "base": base, "units": r.bs() if since(o.release, "R2007") else 0}
+        while o.handles.p + 8 <= o.stop:  # the layout this block is the sheet of comes last
+            layout = o.handles.h(o.handle)
+    return {"name": name, "base": base, "xref": xref, "layout": layout, "units": r.bs() if since(o.release, "R2007") else 0}
 
 
 def _entity_common(o: dwg.Obj) -> dict:

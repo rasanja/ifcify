@@ -220,6 +220,8 @@ class _Builder:
                 self.skipped["marked invisible"] += 1
             else:
                 self.by_owner[e["owner"]].append(e)
+        # the drawing's named object dictionary: groups, layouts, materials and so on by name
+        self.root = next((entries for entries in drawing.dictionaries.values() if "ACAD_GROUP" in entries), {})
         self.layer_items = defaultdict(list)
         self.maps: dict[int, object] = {}  # block handle -> IfcRepresentationMap, or None if empty
         self.styles: dict[tuple, object] = {}  # (kind, colour, width) -> shared style entity
@@ -241,9 +243,10 @@ class _Builder:
         metres = _METRES.get(units) or (0.001 if drawing.metric else 0.0254)
         self.millimetre = 0.001 / metres  # in drawing units, for line widths
         self.metres = metres
+        layouts = {handle: name for name, handle in drawing.dictionaries.get(self.root.get("ACAD_LAYOUT"), {}).items()}
         # A drawing is its model space. One with nothing there, such as a title block, is its paper-space layouts.
         spaces = [("Model Space", model_space)] if self.by_owner.get(model_space) else [
-            (f"Layout {n}", handle)
+            (layouts.get(drawing.blocks[handle]["layout"], f"Layout {n}"), handle)
             for n, handle in enumerate((h for h, b in drawing.blocks.items() if b["name"].lower().startswith("*paper_space") and self.by_owner.get(h)), 1)
         ]  # fmt: skip
         written = {handle for _, handle in spaces}
@@ -367,7 +370,7 @@ class _Builder:
             product.Tag = f"{e['handle']:X}"
         block = self.d.blocks.get(e.get("block"))
         if block and not block["name"].startswith("*"):
-            self.property_set("DWG_Block", {"BlockName": block["name"]}, [product])
+            self.property_set("DWG_Block", {"BlockName": block["name"]} | ({"ExternalFile": block["xref"]} if block["xref"] else {}), [product])
         tags = {}
         for tag, value in self.attributes.get(e["handle"], ()):
             n = sum(1 for k in tags if k == tag or k.startswith(tag + "_"))
@@ -421,7 +424,7 @@ class _Builder:
     def groups(self) -> None:
         """AutoCAD groups: named sets of entities, kept as IfcGroup."""
         f = self.f
-        names = {handle: name for entries in self.d.dictionaries.values() for name, handle in entries.items()}
+        names = {handle: name for name, handle in self.d.dictionaries.get(self.root.get("ACAD_GROUP"), {}).items()}
         for handle, group in self.d.groups.items():
             members = [self.by_handle[m] for m in group["members"] if m in self.by_handle]
             if members:

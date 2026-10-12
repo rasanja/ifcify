@@ -122,7 +122,7 @@ def test_title_block_drawings_export_their_layouts():
     if not sample.exists():
         pytest.skip("sample not present")
     model = ifcopenshell.file.from_string(convert(sample.read_bytes())[0])
-    assert [storey.Name for storey in model.by_type("IfcBuildingStorey")] == ["Layout 1", "Layout 2"]
+    assert [storey.Name for storey in model.by_type("IfcBuildingStorey")] == ["TS-SS-DL", "PPS-SS-DL"]  # the layouts' own names
     assert len(model.by_type("IfcAnnotation")) > 500
 
 
