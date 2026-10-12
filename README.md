@@ -356,11 +356,14 @@ Path("drawing.ifc").write_text(ifc_text)
   `units` in the request.
 - IFC4X3 has no cone surface, so cone faces are written as surfaces of revolution. Viewer support for that varies.
 - Some curved faces of solids do not come through IfcOpenShell (and so Bonsai) as AutoCAD has them. Measured
-  against AutoCAD on the two 3D test drawings, 71 of 90 solids match its surface area within 0.2 percent.
-  The rest have a face of one of these kinds: a tube swept along a path, the rounded end of a pin (a torus
-  that crosses its own axis), or a sliver a few thousandths of a unit wide. For those the output can show a
-  missing or oversized face. Patches of a sphere are written as a revolved arc because IfcOpenShell does
-  not read `IfcSphericalSurface`.
+  against AutoCAD on the two 3D test drawings, 66 of 82 solids match its surface area within 0.2 percent.
+  The rest have a face of one of these kinds: the rounded end of a pin (a torus that crosses its own
+  axis), a sliver a few thousandths of a unit wide, or a long narrow strip that the kernel builds but its
+  mesher leaves empty at fine settings. For those the output can show a missing or oversized face.
+  Two shapes are written differently from how AutoCAD stores them, without moving any point, because
+  IfcOpenShell cannot build the stored form: a patch of a sphere is a revolved arc (it does not read
+  `IfcSphericalSurface`), and a tube swept along a path (a cable, a handrail) is two half-tubes joined
+  along its length where AutoCAD has one face closed on itself.
 - Text is positioned, aligned, sized and given its font. Its width factor is a property only, so a viewer
   draws it at normal width.
 - Arc-length and jogged-radius dimensions are placed by the block AutoCAD drew for them. Saved without

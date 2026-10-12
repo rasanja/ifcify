@@ -209,6 +209,105 @@ def _kind(item) -> str:
     return "Curve3D"
 
 
+def _halves(degree, knots, counts, poles):
+    """A B-spline cut in two at a knot near its middle: ((knots, counts, poles), (knots, counts, poles)).
+
+    Knots are given and returned as ACIS writes them (end knots repeated `degree` times). The cut is made by
+    inserting the knot until the curve passes through a pole there, which changes no point of it.
+    """
+    flat = [k for k, m in zip(knots, counts) for _ in range(m)]
+    flat = [flat[0], *flat, flat[-1]]
+    middle = (flat[0] + flat[-1]) / 2
+    at = min(flat[degree + 1 : -degree - 1], key=lambda k: abs(k - middle), default=middle)
+    poles = list(poles)
+    while flat.count(at) < degree:
+        k = max(i for i, u in enumerate(flat) if u <= at)
+        blend = lambda i: (at - flat[i]) / (flat[i + degree] - flat[i])  # noqa: E731
+        poles = [
+            poles[i] if i <= k - degree else poles[i - 1] if i > k
+            else tuple((1 - blend(i)) * p + blend(i) * q for p, q in zip(poles[i - 1], poles[i]))
+            for i in range(len(poles) + 1)
+        ]  # fmt: skip
+        flat.insert(k + 1, at)
+    k = max(i for i, u in enumerate(flat) if u <= at)
+
+    def acis(part):
+        distinct = sorted(set(part))
+        repeats = [part.count(u) for u in distinct]
+        repeats[0], repeats[-1] = repeats[0] - 1, repeats[-1] - 1
+        return distinct, repeats
+
+    return (*acis([*flat[: k + 1], at]), poles[: k - degree + 1]), (*acis([at, *flat[k - degree + 1 :]]), poles[k - degree :])
+
+
+def _turning(points) -> tuple:
+    """Which way a closed run of points goes round, as a vector (right-hand rule)."""
+    total = (0.0, 0.0, 0.0)
+    for p, q in zip(points, [*points[1:], points[0]]):
+        total = tuple(t + c for t, c in zip(total, _cross(p, q)))
+    return total
+
+
+def _open_tubes(faces) -> list:
+    """Faces with every tube cut lengthwise into two patches.
+
+    ACIS bounds a swept tube (a cable, a handrail) as one face on a spline surface that closes on itself: rim,
+    seam, rim, seam back. Geometry kernels fail on that seam (IfcOpenShell builds nothing). Cut in two along the
+    seam and along the line opposite it, each half is an ordinary four-sided patch on its own surface. Nothing
+    moves: the surface is divided by knot insertion, and the new edges are the patches' own boundary curves.
+    """
+    swaps, made = {}, []
+    for face in faces:
+        s, loops = face["surface"], face["loops"]
+        loop = loops[0] if len(loops) == 1 else ()
+        keys = [edge[0] for edge in loop]
+        seam = [edge for edge in loop if keys.count(edge[0]) == 2]
+        rims = [edge for edge in loop if keys.count(edge[0]) == 1 and edge[1] and _same(edge[1], edge[2])]
+        if not (s and s[0] == "bspline" and len(s) > 8 and sum(s[8]) == 1 and len(loop) == 4 and len(seam) == 2 and len(rims) == 2 and len(s[7][0][0]) == 3):
+            made.append(face)
+            continue
+        _, du, dv, ku, mu, kv, mv, grid, closed = s
+        if turned := closed[1]:  # make u the direction that goes round
+            grid, du, dv, ku, mu, kv, mv = [list(column) for column in zip(*grid)], dv, du, kv, mv, ku, mu
+        reach = math.dist(grid[0][0], grid[len(grid) // 2][0]) or 1.0
+        ends = {j: rim for j in (0, -1) for rim in rims if math.dist(rim[1], grid[0][j]) < 0.05 * reach}
+        if len(ends) != 2 or ends[0] is ends[-1]:
+            made.append(face)  # trimmed short of the surface's own ends: not the plain tube this handles
+            continue
+        (lk, lm, left), (rk, rm, right) = _halves(du, ku, mu, [tuple(c for p in row for c in p) for row in grid])
+        left, right = ([[row[i : i + 3] for i in range(0, len(row), 3)] for row in half] for half in (left, right))
+        halves = {}
+        for j, (key, _, _, curve, same_sense, forward) in ends.items():
+            corner = grid[0][j]  # the surface's own corner, which the stored vertex only approximates
+            ours = _turning([row[j] for row in grid])
+            theirs = curve[2] if curve[0] == "ellipse" else _turning([p[:3] for p in curve[4]])
+            along = (sum(a * b for a, b in zip(ours, theirs)) > 0) == (same_sense == forward)  # walked with u, as the tube's loop has it
+            halves[j] = (
+                ((key, "left"), corner, left[-1][j], ("bspline", du, lk, lm, [row[j] for row in left]), True),
+                ((key, "right"), right[0][j], corner, ("bspline", du, rk, rm, [row[j] for row in right]), True),
+            )
+            swaps[key] = (forward == along, *halves[j])
+        start, end = grid[0][0], grid[0][-1]
+        joint = ((seam[0][0], "seam"), start, end, ("bspline", dv, kv, mv, left[0]), True)
+        middle = ((seam[0][0], "middle"), left[-1][0], left[-1][-1], ("bspline", dv, kv, mv, left[-1]), True)
+        # each patch walked round its own surface: low rim, far side, high rim back, near side back
+        walks = (
+            [(*halves[0][0], True), (*middle, True), (*halves[-1][0], False), (*joint, False)],
+            [(*halves[0][1], True), (*joint, True), (*halves[-1][1], False), (*middle, False)],
+        )
+        if not swaps[ends[0][0]][0] == ends[0][5]:  # the tube's own loop went the other way round
+            walks = [[(*edge[:5], not edge[5]) for edge in reversed(walk)] for walk in walks]
+        for (knots, repeats, half), walk in zip(((lk, lm, left), (rk, rm, right)), walks):
+            made.append(dict(face, surface=("bspline", du, dv, knots, repeats, kv, mv, half, (False, False)), loops=[walk], same_sense=face["same_sense"] != turned))
+    for face in made if swaps else ():
+        for loop in face["loops"]:
+            for i in reversed(range(len(loop))):
+                if loop[i][0] in swaps:  # a neighbour bounded by a whole rim now meets its two halves
+                    with_u, first, second = swaps[loop[i][0]]
+                    loop[i : i + 1] = [(*first, True), (*second, True)] if with_u == loop[i][5] else [(*second, False), (*first, False)]
+    return made
+
+
 class _Builder:
     def __init__(self, drawing: Drawing, name: str, heights: dict | None = None) -> None:
         self.d = drawing
@@ -1394,7 +1493,7 @@ class _Builder:
             return vertices[key]
 
         closed = True
-        for face in body["faces"]:
+        for face in _open_tubes(body["faces"]):
             surface, flipped = self.acis_surface(face["surface"], face) if face["surface"] else (None, False)
             loops, ok = [], surface is not None
             for loop in face["loops"] if ok else ():

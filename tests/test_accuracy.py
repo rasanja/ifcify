@@ -30,3 +30,33 @@ def test_fixture_agrees_with_autocad():
     assert max(built.values()) < 3e-3, built
     # every one of the eight solids was measured on its own
     assert sum(1 for row in rows if row[1] == "3DSOLID" and row[3] == "volume") == 8
+
+
+def test_a_spline_is_cut_in_two_without_moving_it():
+    from dwg2ifc import ifc
+
+    # one cubic segment, cut at its middle: the two halves are the ones de Casteljau's construction gives
+    (knots, counts, left), (_, _, right) = ifc._halves(3, [0.0, 1.0], [3, 3], [(0.0, 0.0), (0.0, 8.0), (8.0, 8.0), (8.0, 0.0)])
+    assert (knots, counts) == ([0.0, 0.5], [3, 3])
+    assert left == [(0.0, 0.0), (0.0, 4.0), (2.0, 6.0), (4.0, 6.0)] and right == [(4.0, 6.0), (6.0, 6.0), (8.0, 4.0), (8.0, 0.0)]
+
+
+def test_a_swept_tube_is_built_whole():
+    """A cable swept along a path: one face on a surface closed on itself. Cut lengthwise, a kernel builds it."""
+    import copy
+
+    import pytest
+
+    from dwg2ifc import entities, ifc
+
+    sample = Path(__file__).parent.parent / "sample-assets" / "visualization_-_conference_room.dwg"
+    if not sample.exists():
+        pytest.skip("sample not present")
+    drawing = entities.load(sample.read_bytes())
+    one = copy.copy(drawing)
+    one.entities = [e for e in drawing.entities if e["handle"] == 0x7D5]
+    faces = ifc._open_tubes(one.entities[0]["bodies"][0]["faces"])
+    assert len(one.entities[0]["bodies"][0]["faces"]) == 3 and len(faces) == 4  # the tube in two halves, and its two ends
+    assert all(len(loop) == 4 for face in faces[:2] for loop in face["loops"]) and all(len(face["loops"][0]) == 2 for face in faces[2:])
+    built, _ = accuracy.built(ifc.build(one, "tube")[0])
+    assert built[0x7D5]["area"] == pytest.approx(11.7376, rel=2e-3)  # AutoCAD's own figure for this solid

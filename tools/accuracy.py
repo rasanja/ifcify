@@ -192,15 +192,15 @@ def decoded(drawing) -> dict:
     return out
 
 
-def built(model) -> tuple[dict, dict]:
+def built(model, linear=0.0002, angular=0.1) -> tuple[dict, dict]:
     """From the IFC, through IfcOpenShell's kernel: per product {box, area}, and the solids' total volume,
     box and centroid."""
     settings = ifcopenshell.geom.settings()
     settings.set("use-world-coords", True)
     # finer than the default, for the volume figures. Not finer still: at an angular deflection of 0.02 the
     # mesher throws points far outside some curved faces, which reads as a wrong shape when it is not one.
-    settings.set("mesher-linear-deflection", 0.0002)
-    settings.set("mesher-angular-deflection", 0.1)
+    settings.set("mesher-linear-deflection", linear)
+    settings.set("mesher-angular-deflection", angular)
     scale = ifcopenshell.util.unit.calculate_unit_scale(model)  # the kernel answers in metres
     products, volume, moment, low, high = {}, 0.0, [0.0, 0.0, 0.0], [math.inf] * 3, [-math.inf] * 3
     for product in model.by_type("IfcProduct"):
