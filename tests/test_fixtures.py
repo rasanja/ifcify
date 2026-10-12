@@ -5,6 +5,7 @@ R14 through R2018 plus DXF.
 """
 
 import math
+import struct
 from collections import Counter
 from pathlib import Path
 
@@ -254,3 +255,23 @@ def test_rays_and_construction_lines(path):
     model = ifcopenshell.file.from_string(convert(path.read_bytes())[0])
     lines = [p for p in model.by_type("IfcAnnotation") if p.ObjectType in ("RAY", "XLINE")]
     assert len(lines) == 2 and all(p.Representation.Representations[0].Items[0].is_a("IfcLine") for p in lines)
+
+
+@pytest.mark.parametrize("path", RELEASES, ids=lambda p: p.stem)
+def test_dictionaries_records_and_text_styles(path):
+    drawing = entities.load(path.read_bytes())
+    assert not any("unreadable" in kind for kind in drawing.skipped), dict(drawing.skipped)
+    root = next(entries for entries in drawing.dictionaries.values() if "ACAD_GROUP" in entries)
+    assert root["ACAD_GROUP"] in drawing.dictionaries
+    assert drawing.xrecords and all(isinstance(code, int) for items in drawing.xrecords.values() for code, _ in items)
+    fonts = {style["name"].upper(): style["font"].lower() for style in drawing.styles.values()}
+    assert fonts["STANDARD"] in ("arial", "arial.ttf", "txt", "txt.shx")
+    texts = [e for e in drawing.entities if e["type"] in ("TEXT", "MTEXT")]
+    assert texts and all(e["style"] in drawing.styles for e in texts)
+
+
+def test_record_values_follow_autocads_type_table():
+    # group codes 1 (text), 90 (32-bit), 40 (real), 330 (handle) and 280 (8-bit), as an XRECORD stores them
+    raw = b"\x01\x00\x02\x00a\x00b\x00" + b"\x5a\x00\x07\x00\x00\x00" + b"\x28\x00" + struct.pack("<d", 1.5)
+    raw += b"\x4a\x01" + (0x1F).to_bytes(8, "little") + b"\x18\x01\x01"
+    assert entities._values(raw, True) == [(1, "ab"), (90, 7), (40, 1.5), (330, 0x1F), (280, 1)]

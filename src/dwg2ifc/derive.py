@@ -100,7 +100,7 @@ def spaces(drawing, owner, smallest: float) -> list[dict]:
             seen.add(key)
             found.append({"points": [p[:2] for p in points], "bulges": list(bulges), "outline": outline, "area": size,
                           "elevation": e.get("elevation", 0.0), "handle": e["handle"], "layer": e["layer"],
-                          "xdata": e.get("xdata", ()), "stored": list(drawing.fields.get(e["handle"], ()))})  # fmt: skip
+                          "xdata": e.get("xdata", ()), "dictionary": e.get("dictionary"), "stored": list(drawing.fields.get(e["handle"], ()))})  # fmt: skip
 
     for room in found:
         xs, ys = [p[0] for p in room["outline"]], [p[1] for p in room["outline"]]

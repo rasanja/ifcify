@@ -300,6 +300,7 @@ class _Builder:
                 self.spaces(storey, handle)
                 self.walls(storey, handle)
                 self.columns(storey, handle)
+        self.groups()
         for kind, occurrences in self.typed.items():
             f.createIfcRelDefinesByType(ifcopenshell.guid.new(), None, None, None, occurrences, kind)
         for (layer, kind, colour, linetype), described in self.described.items():
@@ -345,6 +346,7 @@ class _Builder:
         if stored:  # values the drawing holds for this entity that its shape alone does not show
             self.property_set("DWG_Stored", stored, [product])
         self.xdata(e, product)
+        self.records(e, product)
 
     def xdata(self, e, product) -> None:
         for app, items in e.get("xdata", ()):
@@ -353,6 +355,28 @@ class _Builder:
             if name and not name.upper().startswith(("ACAD", "ACDB", "GRADIENTCOLOR")):
                 listed = "; ".join(f"{code}={value}" for code, value in items)
                 self.property_set(f"DWG_XData_{name}", {"Items": listed}, [product])  # set names must be unique per object
+
+    def records(self, e, product) -> None:
+        """Data other programs filed under the entity (its extension dictionary), one property set per record."""
+        d = self.d
+        entries = dict(d.dictionaries.get(e.get("dictionary"), {}))
+        for name, handle in list(entries.items()):
+            entries |= d.dictionaries.get(handle, {})  # one level down: a program's folder of records
+        for name, handle in entries.items():
+            # shortcut: AutoCAD's own bookkeeping records are left out, as with xdata
+            if d.xrecords.get(handle) and not name.upper().startswith(("ACAD", "ACDB")):
+                listed = "; ".join(f"{code}={value}" for code, value in d.xrecords[handle])
+                self.property_set(f"DWG_Record_{name}", {"Items": listed}, [product])
+
+    def groups(self) -> None:
+        """AutoCAD groups: named sets of entities, kept as IfcGroup."""
+        f = self.f
+        names = {handle: name for entries in self.d.dictionaries.values() for name, handle in entries.items()}
+        for handle, group in self.d.groups.items():
+            members = [self.by_handle[m] for m in group["members"] if m in self.by_handle]
+            if members:
+                made = f.createIfcGroup(ifcopenshell.guid.new(), None, names.get(handle, f"{handle:X}"), group["description"] or None)
+                f.createIfcRelAssignsToGroup(ifcopenshell.guid.new(), None, None, None, members, None, made)
 
     def spaces(self, storey, owner) -> None:
         """Rooms the drawing outlines and labels, as IfcSpace: a footprint extruded to an assumed height."""
@@ -399,6 +423,7 @@ class _Builder:
                 [space],
             )  # fmt: skip
             self.xdata(room, space)
+            self.records(room, space)
             made.append(space)
         if made:
             f.createIfcRelAggregates(ifcopenshell.guid.new(), None, None, None, storey, made)
@@ -667,6 +692,8 @@ class _Builder:
         f = self.f
         for item in items:
             kind = _kind(item)
+            if kind == "Text":
+                self.text_style(e, _rgb(color), item)
             if kind in ("MappedRepresentation", "Text", "Point"):
                 continue  # a block's contents are styled where the block is defined
             surface = kind in _BODY_KINDS
@@ -683,6 +710,21 @@ class _Builder:
                     thickness = f.createIfcPositiveLengthMeasure(width) if width else None
                     self.styles[key] = f.createIfcCurveStyle(None, font, thickness, colour, None)
             f.createIfcStyledItem(item, [self.styles[key]], None)
+
+    def text_style(self, e, rgb, item) -> None:
+        """The colour, font and size text is drawn with, from the entity and its text style."""
+        f = self.f
+        named = self.d.styles.get(e.get("style"), {})
+        height = float(e.get("height") or item.Extent.SizeInY)  # a part of a custom entity has only its box
+        key = ("Text", rgb, named.get("name"), height)
+        if key not in self.styles:
+            colour = f.createIfcColourRgb(None, *(c / 255 for c in rgb))
+            # shortcut: text with no style of its own (a dimension's, a proxy's) is given AutoCAD's default font
+            name = named.get("font") or "txt"
+            slant = "oblique" if named.get("oblique") else None
+            font = f.createIfcTextStyleFontModel(name, [name], slant, None, None, f.createIfcLengthMeasure(height))
+            self.styles[key] = f.createIfcTextStyle(named.get("name"), f.createIfcTextStyleForDefinedFont(colour, None), None, font, None)
+        f.createIfcStyledItem(item, [self.styles[key]], None)
 
     def polyline(self, points):
         points = _distinct(points)

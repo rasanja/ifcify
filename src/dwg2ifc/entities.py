@@ -21,6 +21,10 @@ class Drawing:
         self.apps: dict[int, str] = {}  # registered application handle -> name, for xdata
         self.dimstyles: dict[int, dict] = {}  # handle -> {scale, arrow, text}
         self.spaces: dict[str, int] = {}  # "model" and "paper" -> block header handle, from the block table
+        self.dictionaries: dict[int, dict] = {}  # handle -> {entry name: handle of the object it owns}
+        self.xrecords: dict[int, list] = {}  # handle -> [(DXF group code, value)]
+        self.groups: dict[int, dict] = {}  # handle -> {description, members}; its name is its key in a dictionary
+        self.styles: dict[int, dict] = {}  # text style handle -> {name, font, width, oblique}
         self.entities: list[dict] = []  # each has type, handle, owner (block header handle), layer
         self.skipped: Counter[str] = Counter()  # entity types we could not convert
 
@@ -220,6 +224,108 @@ def _linetype(o: dwg.Obj) -> dict:
     return {"name": name, "dashes": dashes}
 
 
+def _dictionary(o: dwg.Obj) -> dict:
+    """Entry name -> handle of the object the dictionary owns (AcDbImpDictionary::dwgInFields)."""
+    skip = _object_common(o)
+    r = o.r
+    count = r.bl()
+    if since(o.release, "R2000"):
+        r.bs()  # what to do with a duplicate name when drawings are merged
+    if since(o.release, "R14"):
+        r.rc()  # whether it owns its entries
+    names = [o.text() for _ in range(count)]
+    for _ in range(1 + skip):
+        o.handles.h(o.handle)
+    return {name: o.handles.h(o.handle) for name in names}
+
+
+# How a record's value is stored, by DXF group code: AutoCAD's own table (acdbGroupCodeToType in libacdb).
+_VALUE_TYPES = (
+    ("text", "0-9 100-102 105 300-309 320-329 410-419 430-439 470-479 999-1003 1005"),
+    ("point", "10-17 110-112 210-219 1010-1013"),
+    ("real", "38-59 140-149 460-469 1040-1042"),
+    ("int16", "60-79 170-179 270-279 370-389 400-409 1070"),
+    ("int32", "90-99 420-429 440-459 1071"),
+    ("int64", "160-169"),
+    ("int8", "280-299"),
+    ("chunk", "310-319 1004"),
+    ("handle", "330-369 390-399"),
+)
+_VALUE_TYPE = {
+    code: kind
+    for kind, ranges in _VALUE_TYPES
+    for first, _, last in (span.partition("-") for span in ranges.split())
+    for code in range(int(first), int(last or first) + 1)
+}
+_FIXED_VALUES = {"real": "<d", "int16": "<h", "int32": "<i", "int64": "<q", "int8": "<b", "point": "<3d"}
+
+
+def _values(raw: bytes, unicode: bool) -> list:
+    """The (group code, value) pairs of an XRECORD (AcDbImpXrecord::stepPosition gives the sizes)."""
+    out, i = [], 0
+    try:
+        while i < len(raw):
+            code = struct.unpack_from("<h", raw, i)[0]
+            kind = _VALUE_TYPE.get(code)
+            i += 2
+            if kind == "text":
+                n = struct.unpack_from("<H", raw, i)[0]
+                if unicode:
+                    value, i = raw[i + 2 : i + 2 + 2 * n].decode("utf-16-le", "replace"), i + 2 + 2 * n
+                else:  # shortcut: decoded as cp1252, use the code page byte for other scripts
+                    value, i = raw[i + 3 : i + 3 + n].decode("cp1252", "replace"), i + 3 + n
+            elif kind == "chunk":
+                value, i = raw[i + 1 : i + 1 + raw[i]].hex(), i + 1 + raw[i]
+            elif kind == "handle":
+                value, i = int.from_bytes(raw[i : i + 8], "little"), i + 8
+            elif kind:
+                value = struct.unpack_from(_FIXED_VALUES[kind], raw, i)
+                value, i = value if kind == "point" else value[0], i + struct.calcsize(_FIXED_VALUES[kind])
+            else:
+                break  # AutoCAD stops at a code it has no type for, too
+            out.append((code, value))
+    except (IndexError, struct.error):
+        pass
+    return out
+
+
+def _xrecord(o: dwg.Obj) -> list:
+    """Free-form data another object or program attached: a list of typed values."""
+    _object_common(o)
+    r = o.r
+    raw = r.raw(r.bl())
+    if since(o.release, "R2000"):
+        r.bs()  # duplicate handling, as in a dictionary
+    return _values(raw, o.unicode)
+
+
+def _group(o: dwg.Obj) -> dict:
+    """A named selection of entities (AcDbImpGroup::dwgInFields)."""
+    skip = _object_common(o)
+    r = o.r
+    description = o.text()
+    r.bs(), r.bs()  # unnamed, selectable
+    count = r.bl()
+    for _ in range(1 + skip):
+        o.handles.h(o.handle)
+    return {"description": description, "members": [o.handles.h(o.handle) for _ in range(count)]}
+
+
+def _style(o: dwg.Obj) -> dict:
+    """A text style: the font and the proportions text is drawn with."""
+    name = _table_name(o)
+    r = o.r
+    r.b(), r.b()  # shape file, vertical
+    r.bd()  # fixed height
+    width, oblique = r.bd(), r.bd()
+    r.rc(), r.bd()  # mirroring, last height used
+    font = o.text()
+    o.text()  # big font, for Asian scripts
+    # a TrueType font is named in the style's xdata; load() picks AutoCAD's own entry once application names are known
+    faces = [(app, next((v for code, v in xdata(raw, o.unicode) if code == 1000 and v), "")) for app, raw in o.eed]
+    return {"name": name, "font": font, "faces": faces, "width": width, "oblique": oblique}
+
+
 def _block_control(o: dwg.Obj) -> dict:
     """The block table: its last two handles name model space and the active paper space."""
     skip = _object_common(o)
@@ -297,7 +403,7 @@ def _entity_common(o: dwg.Obj) -> dict:
     for _ in range(reactors):
         hr.h()
     if not xdic_missing:
-        hr.h()
+        e["dictionary"] = hr.h(o.handle)  # records other programs attached to this entity
     links = not since(release, "R2004")  # older files chain entities; sub-entity lists (vertices) rely on it
     if links:
         e["next"] = o.handle + 1
@@ -592,7 +698,8 @@ def _text(o, r):
         r.bd()  # width factor
         text = o.text()
         r.bs(), r.bs(), r.bs()  # generation, horizontal and vertical alignment
-        return {"point": (*point, elevation), "rotation": rotation, "height": height, "extrusion": extrusion, "text": text}
+        return {"point": (*point, elevation), "rotation": rotation, "height": height, "extrusion": extrusion, "text": text,
+                "style": o.handles.h(o.handle)}  # fmt: skip
     flags = r.rc()
     elevation = 0.0 if flags & 1 else r.rd()
     point = r.rd2()
@@ -610,7 +717,8 @@ def _text(o, r):
     for bit in (0x20, 0x40, 0x80):
         if not flags & bit:
             r.bs()  # generation, horizontal and vertical alignment
-    return {"point": (*point, elevation), "rotation": rotation, "height": height, "extrusion": extrusion, "text": text}
+    return {"point": (*point, elevation), "rotation": rotation, "height": height, "extrusion": extrusion, "text": text,
+            "style": o.handles.h(o.handle)}  # fmt: skip
 
 
 def _attrib(o, r):
@@ -684,6 +792,7 @@ def _mtext(o, r):
     extent_height, extent_width = r.bd(), r.bd()
     e["extent"] = (extent_width, extent_height)  # the box AutoCAD measured around the text as drawn
     e["text"] = o.text()
+    e["style"] = o.handles.h(o.handle)
     o.r.p = o.end  # the remaining fields are layout details we do not use
     return e
 
@@ -887,6 +996,13 @@ _DECODERS = {
     for name in ("3DSOLID", "REGION", "BODY", "SURFACE", "PLANESURFACE", "EXTRUDEDSURFACE", "REVOLVEDSURFACE",
                  "SWEPTSURFACE", "LOFTEDSURFACE", "NURBSURFACE")  # fmt: skip
 } | {name: _dimension for name in dwg.FIXED_TYPES.values() if name.startswith("DIMENSION")}
+# objects that are not drawn but name, group or describe what is: where to keep them, and their decoder
+_OBJECTS = {
+    "DICTIONARY": ("dictionaries", _dictionary),
+    "XRECORD": ("xrecords", _xrecord),
+    "GROUP": ("groups", _group),
+    "STYLE": ("styles", _style),
+}
 # entities with nothing to draw: block brackets, viewports, and attribute templates (the ATTRIB holds the value)
 _STRUCTURAL = {"BLOCK", "ENDBLK", "SEQEND", "VIEWPORT", "ATTDEF"}
 
@@ -946,6 +1062,11 @@ def load(data: bytes) -> Drawing:
                     pass  # drawn as a solid line
             elif o.type == "APPID":
                 drawing.apps[o.handle] = _table_name(o)
+            elif o.type in _OBJECTS or (o.type == "ACDBDICTIONARYWDFLT" and since(release, "R2000")):
+                store, decode = _OBJECTS.get(o.type, _OBJECTS["DICTIONARY"])
+                getattr(drawing, store)[o.handle] = decode(o)
+                if o.r.p != o.end:
+                    raise ValueError(f"{o.type} {o.handle:X} decoded to bit {o.r.p}, expected {o.end}")
             elif o.type == "BLOCK_CONTROL":
                 drawing.spaces = _block_control(o)
             elif o.type == "BLOCK_HEADER":
@@ -970,6 +1091,8 @@ def load(data: bytes) -> Drawing:
         except (ValueError, IndexError, KeyError, OverflowError):
             drawing.skipped[f"{kind} (unreadable)"] += 1
 
+    for style in drawing.styles.values():
+        style["font"] = next((face for app, face in style.pop("faces") if face and drawing.apps.get(app) == "ACAD"), style["font"])
     _attach_vertices(drawing)
     if any(e.get("bodies", 0) is None for e in drawing.entities):  # R2013+ keeps ACIS data outside the entity
         store = datastore.records(secs.get("AcDb:AcDsPrototype_1b", b""))

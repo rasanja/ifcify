@@ -181,3 +181,14 @@ def test_linetypes_reach_the_ifc():
     assert fonts["CENTER"] == [(1.25, 0.25), (0.25, 0.25)]
     assert fonts["HIDDEN"] == [(0.25, 0.125)]
     assert any(style.CurveFont for style in model.by_type("IfcCurveStyle"))
+
+
+def test_groups_fonts_and_attached_records_reach_the_ifc():
+    model = ifcopenshell.file.from_string(convert((ASSETS / "building.dwg").read_bytes())[0])
+    groups = model.by_type("IfcGroup")
+    assert groups and all(rel.RelatedObjects for group in groups for rel in group.IsGroupedBy)
+    assert {style.TextFontStyle.Name for style in model.by_type("IfcTextStyle")} >= {"Arial", "txt.shx"}
+    # a facilities program tagged the room outlines of the floor plan; its record travels with each room
+    model = ifcopenshell.file.from_string(convert((ASSETS / "building001-0_floor1.dwg").read_bytes())[0])
+    tagged = [p for p in model.by_type("IfcPropertySet") if p.Name == "DWG_Record_Planon_Space"]
+    assert len(tagged) >= 70 and "1000=Space" in tagged[0].HasProperties[0].NominalValue.wrappedValue
