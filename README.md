@@ -23,6 +23,7 @@ DWG releases R14, R2000, R2004, R2007, R2010, R2013 and R2018.
 | Multileaders | leader lines and one text (or the block they hold) |
 | Images, wipeouts | the outline of the frame; an image's file path as a property (the picture is not in the DWG) |
 | Lights | `IfcLightFixture` at the light's position, with its name, kind and intensity |
+| PDF, DWF and DGN underlays | the clip outline, or the insertion point when the page is not clipped; file and page as properties |
 | Shapes | a point, with the shape file and number as properties (the symbol is not in the DWG) |
 | Other custom entities | drawn from the picture of themselves they carry, when they have one |
 | Groups | `IfcGroup` |
@@ -174,8 +175,8 @@ AutoCAD hides them. Room outlines are the exception: they are read from hidden l
 offices often keep them there.
 
 Not converted: custom entities that carry no picture of themselves, and paper-space layouts of drawings
-that also have a model. PDF, DWF and DGN underlays and embedded OLE objects are in the first group too:
-AutoCAD's console cannot create them, so there was nothing to check a decoder against. AutoCAD Architecture objects (walls, doors, windows as objects rather than
+that also have a model. Embedded OLE objects are in the first group too. An underlay's page is not in
+the DWG, and neither is its size, so an unclipped underlay is only a point with the file's path. AutoCAD Architecture objects (walls, doors, windows as objects rather than
 linework) are in the first group: they are drawn from their picture and their heights and styles are
 not read yet, because no drawing containing them was available to check a decoder against. Every entity left out, for any of these
 reasons, is counted by reason in the `X-DWG-Skipped` response header. The properties listed above as not
@@ -270,8 +271,8 @@ Path("drawing.ifc").write_text(ifc_text)
 - Solids in drawings saved as R2000 or R14 lose their rounded (filleted) faces; the rest of the solid converts.
 - IFC4X3 has no cone surface, so cone faces are written as surfaces of revolution. Viewer support for that varies.
 - Text is positioned, sized and given its font, but exact alignment and width factor are not carried over.
-- Arc-length and jogged-radius dimensions are placed by the block AutoCAD drew for them; this path could
-  not be checked against AutoCAD, whose console cannot create them without a mouse pick.
+- Arc-length and jogged-radius dimensions are placed by the block AutoCAD drew for them. Saved without
+  that block they are not redrawn, unlike the other dimension kinds.
 
 ## Development
 

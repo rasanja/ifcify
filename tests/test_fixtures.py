@@ -368,3 +368,43 @@ def test_multi_line_attribute_keeps_its_tag_and_value(path):
     model = ifcopenshell.file.from_string(convert(path.read_bytes())[0])
     sets = [ifcopenshell.util.element.get_psets(p) for p in model.by_type("IfcProduct") if p.ObjectType == "INSERT"]
     assert sum(1 for s in sets if s.get("DWG_Block", {}).get("BlockName") == "NOTED" and s["DWG_Attributes"][tag] == "Two words") == 1
+
+
+# Drawn by hand in AutoCAD's window, because its console cannot pick an object: an arc of radius 10 from 0 to
+# 90 degrees, DIMARC placed at 12,12, DIMJOGGED with its line at 8,4, and a PDF attached at 20,0.
+@pytest.mark.parametrize("path", sorted(FIXTURES.glob("extras_*.dwg")), ids=lambda p: p.stem)
+def test_picked_dimensions_and_underlay(path):
+    drawing = entities.load(path.read_bytes())
+    assert not drawing.skipped
+    one = {e["type"]: e for e in drawing.entities if e["owner"] == drawing.spaces["model"]}
+    assert set(one) == {"ARC", "ARC_DIMENSION", "LARGE_RADIAL_DIMENSION", "PDFUNDERLAY"}
+    arc, jogged, page = one["ARC_DIMENSION"], one["LARGE_RADIAL_DIMENSION"], one["PDFUNDERLAY"]
+    assert near(arc["text_point"], (12.0, 12.0, 0.0)) and near(jogged["text_point"], (8.0, 4.0, 0.0))
+    assert all(drawing.blocks[e["block"]]["name"].startswith("*D") for e in (arc, jogged))
+    if "extras_14" not in path.name:  # R14 stores no measurement
+        assert arc["measurement"] == pytest.approx(5 * math.pi) and jogged["measurement"] == pytest.approx(10.0)
+    assert (page["point"], page["rotation"], page["scale"]) == ((20.0, 0.0, 0.0), 0.0, (1.0, 1.0, 1.0))
+    assert drawing.underlays[page["definition"]] == {"file": "/tmp/dwg2ifc_fixture.pdf", "page": "1"}
+    model = ifcopenshell.file.from_string(convert(path.read_bytes())[0])
+    drawn = {p.ObjectType: p.Representation.Representations[0].Items[0] for p in model.by_type("IfcAnnotation")}
+    assert drawn["ARC_DIMENSION"].is_a("IfcMappedItem") and drawn["LARGE_RADIAL_DIMENSION"].is_a("IfcMappedItem")
+    sets = {p.Name: {v.Name: v.NominalValue.wrappedValue for v in p.HasProperties} for p in model.by_type("IfcPropertySet")}
+    assert sets["DWG_Underlay"]["File"] == "/tmp/dwg2ifc_fixture.pdf" and sets["DWG_Underlay"]["Page"] == "1"
+
+
+def test_underlay_clip_outline_is_placed_scaled_and_turned():
+    """The hand-drawn underlay has no clip, so one is encoded here: a page at 10,0, scaled by 3, turned a quarter."""
+    raw = lambda value: "".join(f"{byte:08b}" for byte in struct.pack("<d", value))  # noqa: E731
+    bd = lambda value: "00" + raw(value)  # noqa: E731
+    rc = lambda value: f"{value:08b}"  # noqa: E731
+    fields = [*map(bd, (0, 0, 1)), *map(bd, (10, 0, 0)), bd(math.pi / 2), *map(bd, (3, 3, 3)), rc(0), rc(100), rc(0),
+              "01" + rc(2), *map(raw, (0, 0, 2, 1))]  # fmt: skip
+    bits = "".join(fields)
+    data = int(bits.ljust(-(-len(bits) // 8) * 8 + 64, "0"), 2).to_bytes(-(-len(bits) // 8) + 8, "big")
+
+    class Object:  # the parts of dwg.Obj the decoder touches
+        end, handle, handles = len(bits), 1, entities.dwg.Bits(bytes(16))
+
+    e = entities._underlay(Object, entities.dwg.Bits(data))
+    # the rectangle 0,0 to 2,1, three times as large, turned so that the page's x runs up the drawing's y
+    assert [tuple(round(c, 9) for c in p) for p in e["points"]] == [(10.0, 0.0), (10.0, 6.0), (7.0, 6.0), (7.0, 0.0)]

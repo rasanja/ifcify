@@ -2,7 +2,8 @@
 ; so a step AutoCAD rejects is reported and skipped without losing the others.
 ; In a script every space and every newline is an Enter; text prompts take the rest of the line.
 ; The console has no screen, so objects are selected with ALL or L (last), never by picking a point.
-; DIMARC and DIMJOGGED accept only a pick, so arc-length and jogged dimensions are not in the fixtures.
+; DIMARC, DIMJOGGED and PDFATTACH do not work here (they need a pick or the full program), so those are in
+; tests/fixtures/extras_*.dwg instead: drawn by hand in AutoCAD's window, then saved in each release with SAVEAS.
 ;;; noted
 INSUNITS 4
 -ATTDEF M

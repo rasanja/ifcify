@@ -27,6 +27,7 @@ class Drawing:
         self.styles: dict[int, dict] = {}  # text style handle -> {name, font, width, oblique}
         self.materials: dict[int, str] = {}  # material handle -> name
         self.geodata: dict[int, dict] = {}  # at most one: where on Earth the drawing sits (see _geodata)
+        self.underlays: dict[int, dict] = {}  # underlay definition handle -> {file, page}
         self.images: dict[int, str] = {}  # image definition handle -> path of the picture file
         self.histories: dict[int, int] = {}  # solid history handle -> handle of its graph of modelling steps
         self.steps: dict[int, dict] = {}  # modelling step handle -> {owner (the graph), kind, sizes}
@@ -1183,6 +1184,26 @@ def _mleader(o, r):
     return e
 
 
+def _underlay(o, r):
+    """PDF, DWF and DGN underlays (AcDbImpUnderlayReference): where a page of another file is laid under the drawing."""
+    extrusion, point, rotation, scale = r.bd3(), r.bd3(), r.bd(), r.bd3()
+    r.rc(), r.rc(), r.rc()  # flags, contrast, fade
+    cos, sin = math.cos(rotation), math.sin(rotation)
+    # the clip outline, when there is one, is in the page's own coordinates; the page size itself is not stored
+    clip = [(x * scale[0], y * scale[1]) for x, y in (r.rd2() for _ in range(r.bl()))]
+    clip = [clip[0], (clip[1][0], clip[0][1]), clip[1], (clip[0][0], clip[1][1])] if len(clip) == 2 else clip
+    r.p = o.end  # from R2010 an inverted clip may follow
+    return {"point": point, "extrusion": extrusion, "rotation": rotation, "scale": scale, "closed": True, "elevation": point[2],
+            "points": [(point[0] + cos * x - sin * y, point[1] + sin * x + cos * y) for x, y in clip],
+            "definition": o.handles.h(o.handle)}  # fmt: skip
+
+
+def _underlay_file(o: dwg.Obj) -> dict:
+    """The file an underlay shows, and which page or sheet of it."""
+    _object_common(o)
+    return {"file": o.text(), "page": o.text()}
+
+
 def _shape(o, r):
     """SHAPE (AcDbImpShape): a symbol from a compiled shape file, which the drawing names but does not contain."""
     e = {"point": r.bd3(), "size": r.bd(), "rotation": r.bd()}
@@ -1245,6 +1266,9 @@ _DECODERS = {
     "ACAD_TABLE": _table,
     "LIGHT": _light,
     "SHAPE": _shape,
+    "PDFUNDERLAY": _underlay,
+    "DWFUNDERLAY": _underlay,
+    "DGNUNDERLAY": _underlay,
     "MULTILEADER": _mleader,
     "ARC_DIMENSION": _dimension,
     "LARGE_RADIAL_DIMENSION": _dimension,
@@ -1261,6 +1285,9 @@ _OBJECTS = {
     "STYLE": ("styles", _style),
     "IMAGEDEF": ("images", _image_file),
     "MATERIAL": ("materials", _material),
+    "PDFDEFINITION": ("underlays", _underlay_file),
+    "DWFDEFINITION": ("underlays", _underlay_file),
+    "DGNDEFINITION": ("underlays", _underlay_file),
     "GEODATA": ("geodata", _geodata),
     "ACSH_HISTORY_CLASS": ("histories", _history),
 }

@@ -77,7 +77,8 @@ _PLACED = {"IfcDoor", "IfcWindow", "IfcStair", "IfcColumn", "IfcSanitaryTerminal
 _METHODS = {"POLYLINE_2D": "lwpolyline", "ATTRIB": "text", "TRACE": "solid", "3DFACE": "face3d",
             "3DSOLID": "acis", "REGION": "acis", "BODY": "acis"}  # fmt: skip
 _METHODS |= {"IMAGE": "polyline_3d", "WIPEOUT": "polyline_3d", "HELIX": "spline", "MESH": "polyline_pface", "ACAD_TABLE": "insert",
-             "ARC_DIMENSION": "dimension", "LARGE_RADIAL_DIMENSION": "dimension", "LIGHT": "point", "SHAPE": "point"}  # fmt: skip
+             "ARC_DIMENSION": "dimension", "LARGE_RADIAL_DIMENSION": "dimension", "LIGHT": "point", "SHAPE": "point",
+             "PDFUNDERLAY": "underlay", "DWFUNDERLAY": "underlay", "DGNUNDERLAY": "underlay"}  # fmt: skip
 _METHODS |= dict.fromkeys(("SURFACE", "PLANESURFACE", "EXTRUDEDSURFACE", "REVOLVEDSURFACE", "SWEPTSURFACE",
                            "LOFTEDSURFACE", "NURBSURFACE"), "acis")  # fmt: skip
 # representation types that are model geometry rather than drafting
@@ -396,6 +397,9 @@ class _Builder:
         if e["type"] == "SHAPE":  # shortcut: placed as a point; drawing the symbol needs the shape file itself
             file = self.d.styles.get(e["style"], {}).get("font", "")
             self.property_set("DWG_Shape", {"File": file, "Number": e["number"], "Size": e["size"], "Rotation": e["rotation"]}, [product])
+        if e.get("definition") in self.d.underlays:
+            shown = self.d.underlays[e["definition"]]
+            self.property_set("DWG_Underlay", {"File": shown["file"], "Page": shown["page"], "Scale": e["scale"][0], "Rotation": e["rotation"]}, [product])
         if e.get("definition") in self.d.images:
             self.property_set("DWG_Image", {"File": self.d.images[e["definition"]]}, [product])
         self.xdata(e, product)
@@ -841,6 +845,12 @@ class _Builder:
 
     def _point(self, e, _):
         return self.point(e["point"])
+
+    def _underlay(self, e, _):
+        """Its clip outline, or just its insertion point: the page's size is in the other file, not the drawing."""
+        if len(e["points"]) > 1:
+            return self.polycurve(e["points"], (), True, e["elevation"], e["extrusion"])
+        return self.point(_to_wcs(_ocs(e["extrusion"]), e["point"]))
 
     def _circle(self, e, _):
         axes = _ocs(e["extrusion"])
