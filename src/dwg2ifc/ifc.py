@@ -234,7 +234,7 @@ class _Builder:
         self.attributes = defaultdict(list)  # insert handle -> [(tag, value)] from its block attributes
         for e in drawing.entities:
             if e["type"] == "ATTRIB" and e.get("tag"):
-                self.attributes[e.get("insert")].append((e["tag"], e["text"]))
+                self.attributes[e.get("insert")].append((e["tag"], _plain_text(e["text"]) if e.get("multiline") else e["text"]))
 
         project = ifcopenshell.api.root.create_entity(f, ifc_class="IfcProject", name=name)
         model_space = drawing.block_named("*Model_Space")
@@ -1185,6 +1185,8 @@ class _Builder:
     def _text(self, e, _):
         axes = _ocs(e["extrusion"])
         x_axis = _to_wcs(axes, (math.cos(e["rotation"]), math.sin(e["rotation"]), 0.0))
+        if e.get("multiline"):  # a multi-line attribute: written from its first line down
+            return self.text(e, _plain_text(e["text"]), _to_wcs(axes, e["point"]), x_axis, "top-left")
         return self.text(e, e["text"], _to_wcs(axes, e["point"]), x_axis, "bottom-left")
 
     def _parts(self, e, parents):

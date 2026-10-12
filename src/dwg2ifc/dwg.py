@@ -347,11 +347,12 @@ def sections(data: bytes) -> dict[str, bytes]:
 class Bits:
     """MSB-first bit reader over a section. `p` is the position in bits."""
 
-    __slots__ = ("d", "p")
+    __slots__ = ("d", "p", "end")
 
     def __init__(self, data: bytes, pos: int = 0) -> None:
         self.d = data
         self.p = pos
+        self.end = len(data) * 8  # a string stream is given its real end
 
     def bits(self, n: int) -> int:
         start, end = self.p, self.p + n
@@ -491,7 +492,9 @@ def _string_stream(data: bytes, end: int) -> Bits | None:
     if size & 0x8000:
         r.p = pos = pos - 16
         size = (size & 0x7FFF) | (r.rs() << 15)
-    return Bits(data, pos - size)
+    strings = Bits(data, pos - size)
+    strings.end = pos  # for the few objects whose strings are easier to count than to reach
+    return strings
 
 
 def classes(section: bytes, release: str, maintenance: int) -> dict[int, tuple[str, bool]]:

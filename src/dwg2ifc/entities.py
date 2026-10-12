@@ -837,10 +837,18 @@ def _attrib(o, r):
     if since(o.release, "R2018"):
         multiline = r.rc() != 1
     e["tag"] = ""
-    if not multiline:  # shortcut: a multiline attribute embeds a whole MTEXT; its value is read but not its tag
+    if not multiline:
         e["tag"] = o.text()
         r.bs()  # field length
         e["hidden"] = bool(r.rc() & 1)  # the "invisible" attribute flag: data only, not drawn
+    elif o.strings:
+        # the value is a whole MTEXT stored inside the attribute: its text is the next string and the tag the last
+        # shortcut: the MTEXT's own fields are not stepped through, so the "invisible" flag after them is not read
+        strings = []
+        while o.strings.p + 16 <= o.strings.end:
+            strings.append(o.strings.tu())
+        if len(strings) > 1:
+            e["text"], e["tag"], e["multiline"] = strings[0], strings[-1], True
     o.r.p = o.end
     return e
 

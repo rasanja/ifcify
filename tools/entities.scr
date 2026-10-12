@@ -3,6 +3,21 @@
 ; In a script every space and every newline is an Enter; text prompts take the rest of the line.
 ; The console has no screen, so objects are selected with ALL or L (last), never by picking a point.
 ; DIMARC and DIMJOGGED accept only a pick, so arc-length and jogged dimensions are not in the fixtures.
+;;; noted
+INSUNITS 4
+-ATTDEF M
+
+NOTE
+Enter note
+First line
+Second line
+
+300,300 310,290
+LINE 300,290 310,290
+
+-BLOCK NOTED 300,290 ALL
+
+AFLAGS 16
 ;;; block
 INSUNITS 4
 -ATTDEF
@@ -176,3 +191,6 @@ POINTLIGHT 80,230,5 X
 ;;; shape
 LOAD ltypeshp.shx
 SHAPE BOX 120,230 2 0
+;;; multiline_attribute
+-INSERT NOTED 320,290 1 1 0 Two words
+

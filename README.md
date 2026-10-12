@@ -117,6 +117,8 @@ used rather than recomputed:
 - A helix's radius, number of turns and turn height.
 - Text style: the font each text is drawn with, and whether it is slanted.
 - Layout names, group names and descriptions, and material names.
+- The value and tag of a multi-line block attribute (R2018 files; saved to an older release, AutoCAD
+  itself splits it into one plain attribute per line, tagged `NAME_001`, and that is what the file holds).
 
 **Exact only if the drawing declares its unit.** Coordinates are written in the drawing's own unit. Real
 sizes, and floor areas in square metres, depend on which unit that is. A drawing that declares none is
@@ -172,7 +174,8 @@ AutoCAD hides them. Room outlines are the exception: they are read from hidden l
 offices often keep them there.
 
 Not converted: custom entities that carry no picture of themselves, and paper-space layouts of drawings
-that also have a model. AutoCAD Architecture objects (walls, doors, windows as objects rather than
+that also have a model. PDF, DWF and DGN underlays and embedded OLE objects are in the first group too:
+AutoCAD's console cannot create them, so there was nothing to check a decoder against. AutoCAD Architecture objects (walls, doors, windows as objects rather than
 linework) are in the first group: they are drawn from their picture and their heights and styles are
 not read yet, because no drawing containing them was available to check a decoder against. Every entity left out, for any of these
 reasons, is counted by reason in the `X-DWG-Skipped` response header. The properties listed above as not

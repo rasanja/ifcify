@@ -100,7 +100,8 @@ def test_matches_autocad_dxf(path, dxf):
         [tuple(c for p in e["points"] for c in p) + (float(e["closed"]),) for e in mine("LWPOLYLINE")],
         [tuple(c for i in range(len(e[10])) for c in (f(e, 10, i), f(e, 20, i))) + (float(int(e[70][0]) & 1),) for e in theirs("LWPOLYLINE")],
     )
-    assert sorted(e["text"] for e in mine("TEXT", "ATTRIB")) == sorted(e[1][0] for e in dxf if e[0][0] in ("TEXT", "ATTRIB"))
+    # a multi-line attribute has an empty text followed by the text of the MTEXT inside it
+    assert sorted(e["text"] for e in mine("TEXT", "ATTRIB")) == sorted(e[1][0] or e[1][-1] for e in dxf if e[0][0] in ("TEXT", "ATTRIB"))
     match([(*e["point"][:2], e["height"]) for e in mine("TEXT")], [tuple(f(e, c) for c in (10, 20, 40)) for e in theirs("TEXT")])
     # fit-point splines store no control points; ours come from fit_spline and must equal AutoCAD's
     splines = [(e["control"], e["knots"]) if e["control"] else entities.fit_spline(e["fit"], e["knot_parameter"])[::-1] for e in mine("SPLINE")]
@@ -233,9 +234,10 @@ def test_properties_reach_the_ifc(path):
     """Layer, colour, block name and block attributes are carried as property sets."""
     model = ifcopenshell.file.from_string(convert(path.read_bytes())[0])
     psets = [ifcopenshell.util.element.get_psets(p) for p in model.by_type("IfcProduct") if p.ObjectType in ("INSERT", "MINSERT")]
+    assert {p["DWG_Block"]["BlockName"] for p in psets} == {"SYMBOL", "NOTED"}
     # the script inserts block SYMBOL five times, typing an attribute value each time
+    psets = [p for p in psets if p["DWG_Block"]["BlockName"] == "SYMBOL"]
     assert sorted(p["DWG_Attributes"]["TAG1"] for p in psets) == ["Grid", "Mirrored", "Tilted", "Value A", "Value B"]
-    assert {p["DWG_Block"]["BlockName"] for p in psets} == {"SYMBOL"}
     red = next(p for p in model.by_type("IfcProduct") if p.ObjectType == "CIRCLE"
                and ifcopenshell.util.element.get_psets(p)["DWG_Entity"]["Layer"].upper() == "REDLAYER")  # fmt: skip
     described = ifcopenshell.util.element.get_psets(red)["DWG_Entity"]
@@ -353,3 +355,16 @@ def test_stored_geographic_location_becomes_a_map_conversion():
     turned = ifc._map_position(geo | {"north": (1.0, 0.0), "design": (0.0, 0.0, 0.0)}, (0.0, 10.0, 0.0))
     assert (turned["Eastings"], turned["Northings"], turned["XAxisAbscissa"], turned["XAxisOrdinate"]) == (499995.0, 4000000.0, 0.0, 1.0)
     assert ifc._map_position(geo | {"kind": "local grid"}, (0.0, 0.0, 0.0)) == {}
+
+
+@pytest.mark.parametrize("path", RELEASES, ids=lambda p: p.stem)
+def test_multi_line_attribute_keeps_its_tag_and_value(path):
+    """Block NOTED has a multi-line attribute NOTE; it is inserted with the value "Two words"."""
+    # R2018 stores it whole. Saving to an older release, AutoCAD itself writes one plain attribute per line, tagged NOTE_001
+    tag = "NOTE" if path.stem.endswith("2018") else "NOTE_001"
+    drawing = entities.load(path.read_bytes())
+    note = next(e for e in drawing.entities if e["type"] == "ATTRIB" and e["tag"] == tag)
+    assert ifc._plain_text(note["text"]) == "Two words" and bool(note.get("multiline")) == (tag == "NOTE")
+    model = ifcopenshell.file.from_string(convert(path.read_bytes())[0])
+    sets = [ifcopenshell.util.element.get_psets(p) for p in model.by_type("IfcProduct") if p.ObjectType == "INSERT"]
+    assert sum(1 for s in sets if s.get("DWG_Block", {}).get("BlockName") == "NOTED" and s["DWG_Attributes"][tag] == "Two words") == 1
