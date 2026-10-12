@@ -379,7 +379,7 @@ class _Builder:
         self.described[layer.get("name", "0"), e["type"], colour, self.linetype(e, layer).get("name", "Continuous")].append(product)
         if product.is_a("IfcElement"):
             product.Tag = f"{e['handle']:X}"
-        block = self.d.blocks.get(e.get("block"))
+        block = self.named(e)
         if block and not block["name"].startswith("*"):
             self.property_set("DWG_Block", {"BlockName": block["name"]} | ({"ExternalFile": block["xref"]} if block["xref"] else {}), [product])
         tags = {}
@@ -550,7 +550,7 @@ class _Builder:
         # anything drawn for a door or a window marks the gap it sits in as an opening rather than the end of a wall
         evidence = []
         for e in self.by_owner.get(owner, []):
-            block = self.d.blocks.get(e.get("block"), {}).get("name", "") if e["type"] == "INSERT" else ""
+            block = (self.named(e) or {}).get("name", "") if e["type"] == "INSERT" else ""
             kind = classify(block, self.d.layers.get(e["layer"], {}).get("name", ""))
             if kind in ("IfcDoor", "IfcWindow") and e.get("extrusion", _Z) == _Z:
                 points = [e[k] for k in ("point", "start", "end", "center") if k in e] + list(e.get("points", ())[:1])
@@ -846,24 +846,29 @@ class _Builder:
             # a line drawn with a thickness is one face of something, not the thing: two of them make one wall
             return "IfcBuildingElementProxy"
         if any(_kind(i) in _BODY_KINDS or self.is_body(i) for i in items):
-            return classify(self.d.blocks.get(e.get("block"), {}).get("name", ""), layer) or "IfcBuildingElementProxy"
+            return classify((self.named(e) or {}).get("name", ""), layer) or "IfcBuildingElementProxy"
         if e["type"] in ("INSERT", "MINSERT"):
             by_layer = classify(layer)
-            return classify(self.d.blocks.get(e["block"], {}).get("name", "")) or (by_layer if by_layer in _PLACED else None) or "IfcAnnotation"
+            return classify((self.named(e) or {}).get("name", "")) or (by_layer if by_layer in _PLACED else None) or "IfcAnnotation"
         return "IfcAnnotation"
+
+    def named(self, e):
+        """The block an insert is called by: for an adjusted dynamic block, the block the user chose, not its `*U` copy."""
+        return self.d.blocks.get(e.get("named", e.get("block")))
 
     def is_body(self, item) -> bool:
         return item.is_a("IfcMappedItem") and item.MappingSource.MappedRepresentation.RepresentationIdentifier == "Body"
 
     def give_type(self, e, product, items) -> None:
         """A named block is a type and each insert of it an occurrence, as a family and its instances."""
-        block = self.d.blocks.get(e.get("block"))
+        block = self.named(e)
         if not product.is_a("IfcElement") or not block or block["name"].startswith("*") or e["type"] != "INSERT":
             return
-        key = (e["block"], product.is_a())
+        key = (e.get("named", e["block"]), product.is_a())
         if key not in self.types:
             self.types[key] = ifcopenshell.api.root.create_entity(self.f, ifc_class=product.is_a() + "Type", name=block["name"])
-            self.types[key].RepresentationMaps = [self.maps[e["block"]]]
+            if "named" not in e:  # inserts of a dynamic block each have their own shape, so the type has none
+                self.types[key].RepresentationMaps = [self.maps[e["block"]]]
         self.typed[self.types[key]].append(product)
 
     def representation(self, items, footprint=False):

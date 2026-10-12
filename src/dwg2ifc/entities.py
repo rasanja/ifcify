@@ -35,6 +35,7 @@ class Drawing:
         self.aec_styles: dict[int, dict] = {}  # Architecture wall, door or window style handle -> the sizes it stores
         self.property_sets: dict[int, dict] = {}  # Architecture property set handle -> {on (object it describes), definition, values by number}
         self.property_set_defs: dict[int, dict] = {}  # its definition's handle -> {description, names by number}
+        self.dynamic_blocks: dict[int, int] = {}  # block representation handle -> the dynamic block an insert was made from
         self.histories: dict[int, int] = {}  # solid history handle -> handle of its graph of modelling steps
         self.steps: dict[int, dict] = {}  # modelling step handle -> {owner (the graph), kind, sizes}
         self.entities: list[dict] = []  # each has type, handle, owner (block header handle), layer
@@ -1255,6 +1256,19 @@ def _aec(o, r) -> dict:
     return a
 
 
+def _block_representation(o: dwg.Obj) -> int:
+    """ACDB_BLOCKREPRESENTATION_DATA: the dynamic block behind an insert of an anonymous `*U` block.
+
+    AutoCAD draws each adjusted insert of a dynamic block from a private copy; this is the link back to the
+    block the user chose (AcDbBlockRepresentationData).
+    """
+    for _ in range(1 + _object_common(o)):
+        o.handles.h(o.handle)
+    if o.r.bs() != 1:
+        raise ValueError("block representation in another layout")
+    return o.handles.h(o.handle)
+
+
 def _anchor(o: dwg.Obj) -> int:
     """What ties a door, window or opening to its wall: the wall's handle follows the owner's."""
     skip = _object_common(o)
@@ -1603,6 +1617,7 @@ _OBJECTS = {
     "GEODATA": ("geodata", _geodata),
     "AEC_ANCHOR_OPENINGBASE_TO_WALL": ("anchors", _anchor),
     "AEC_VARS_DWG_SETUP": ("aec_units", _aec_setup),
+    "ACDB_BLOCKREPRESENTATION_DATA": ("dynamic_blocks", _block_representation),
     "AEC_WALL_STYLE": ("aec_styles", _aec_style),
     "AEC_DOOR_STYLE": ("aec_styles", _aec_style),
     "AEC_WINDOW_STYLE": ("aec_styles", _aec_style),
@@ -1723,6 +1738,10 @@ def load(data: bytes) -> Drawing:
     for step in drawing.steps.values():
         steps[step["owner"]].append(step)
     for e in drawing.entities:
+        if e["type"] == "INSERT" and e.get("dictionary"):
+            kept = drawing.dictionaries.get(drawing.dictionaries.get(e["dictionary"], {}).get("AcDbBlockRepresentation"), {})
+            if kept.get("AcDbRepData") in drawing.dynamic_blocks:
+                e["named"] = drawing.dynamic_blocks[kept["AcDbRepData"]]
         links = e.pop("links", ())
         made = steps.get(next((drawing.histories[h] for h in links if h in drawing.histories), None), ())
         links = [*links, *(step.get("material") for step in made)]

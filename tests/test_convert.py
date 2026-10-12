@@ -337,3 +337,20 @@ def test_tubes_are_marked_as_closing_on_themselves():
     model = ifcopenshell.file.from_string(convert(sample.read_bytes())[0])
     closed = [(s.UClosed, s.VClosed) for s in model.by_type("IfcBSplineSurfaceWithKnots")]
     assert closed.count((True, False)) + closed.count((False, True)) >= 3 and (False, False) in closed
+
+
+def test_an_adjusted_dynamic_block_keeps_the_name_of_the_block_it_was_made_from():
+    """AutoCAD draws a stretched or flipped dynamic block from a private `*U` copy; the drawing stores which block it is."""
+    sample = ASSETS / "architectural_example-imperial.dwg"
+    if not sample.exists():
+        pytest.skip("sample not present")
+    drawing = entities.load(sample.read_bytes())
+    named = [e for e in drawing.entities if "named" in e]
+    assert all(drawing.blocks[e["block"]]["name"].startswith("*U") for e in named)
+    assert Counter(drawing.blocks[e["named"]]["name"] for e in named) == {"Window - Imperial": 8, "Door - Imperial": 4}
+    model = ifcopenshell.file.from_string(convert(sample.read_bytes())[0])
+    handles = {f"INSERT:{e['handle']:X}" for e in named}
+    made = [p for p in model.by_type("IfcProduct") if p.Name in handles]
+    assert Counter(p.is_a() for p in made) == {"IfcWindow": 8, "IfcDoor": 4}
+    assert {ifcopenshell.util.element.get_psets(p)["DWG_Block"]["BlockName"] for p in made} == {"Window - Imperial", "Door - Imperial"}
+    assert {ifcopenshell.util.element.get_type(p).Name for p in made} == {"Window - Imperial", "Door - Imperial"}
