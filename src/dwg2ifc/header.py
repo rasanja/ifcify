@@ -9,7 +9,7 @@ import struct
 from dwg2ifc.dwg import Bits, since
 
 # releases: * all, >=X from X on, <=X up to X.  types: T text, H handle, HS handle kept in the data
-# stream in every release (HANDSEED), CMC colour, the rest are bit codes.
+# stream in every release (HANDSEED), CMC colour, the rest are bit codes. "BD:name" keeps the value.
 _FIELDS = """
 *       BD BD BD BD T T T T BL BL
 <=R14   BS
@@ -35,7 +35,7 @@ _FIELDS = """
 <=R14   BS
 >=R2004 BL BL BL
 *       BS BS BS BS BS BS BS BS BS BS BS BS BS BS BS BS BS BS BS
-*       BD BD BD BD BD BD BD BD BD BD BD BD BD BD BD BD BD BD BD BD BD
+*       BD:ltscale BD BD BD BD BD BD BD BD BD BD BD BD BD BD BD BD BD BD BD BD
 <=R2004 T
 *       BL BL BL BL
 >=R2004 BL BL BL
@@ -73,17 +73,23 @@ _FIELDS = """
 """
 
 
-def insunits(section: bytes, release: str, maintenance: int) -> int:
-    """DWG INSUNITS code (1 inch, 4 mm, 6 m, ...), or 0 when unknown or the release predates it."""
-    if not since(release, "R2000"):
-        return 0
+def variables(section: bytes, release: str, maintenance: int) -> dict:
+    """The header variables we use: "insunits" (1 inch, 4 mm, 6 m, ...; 0 when unknown or the release
+    predates it) and "ltscale", the factor every linetype pattern in the drawing is drawn at."""
+    found = {"ltscale": 1.0}
     try:
-        return _insunits(section, release, maintenance)
+        _read(section, release, maintenance, found)
     except (ValueError, IndexError, struct.error):
-        return 0
+        pass
+    # the last field in the table is INSUNITS, which R14 does not have
+    return {"insunits": found.get("last", 0) if "done" in found and since(release, "R2000") else 0, "ltscale": found["ltscale"] or 1.0}
 
 
-def _insunits(section: bytes, release: str, maintenance: int) -> int:
+def insunits(section: bytes, release: str, maintenance: int) -> int:
+    return variables(section, release, maintenance)["insunits"]
+
+
+def _read(section: bytes, release: str, maintenance: int, found: dict) -> None:
     start = 16 + 4 + (4 if release == "R2018" or (since(release, "R2010") and maintenance > 3) else 0)
     r = Bits(section, start * 8)
     split = since(release, "R2007")  # text and handles live in their own streams, not in the data
@@ -91,7 +97,6 @@ def _insunits(section: bytes, release: str, maintenance: int) -> int:
         r.rl()  # size in bits
     if since(release, "R2013"):
         r.bll()  # REQUIREDVERSIONS
-    value = 0
     for line in _FIELDS.strip().splitlines():
         releases, *types = line.split()
         if releases.startswith(">=") and not since(release, releases[2:]):
@@ -99,6 +104,7 @@ def _insunits(section: bytes, release: str, maintenance: int) -> int:
         if releases.startswith("<=") and since(release, releases[2:]) and release != releases[2:]:
             continue
         for kind in types:
+            kind, _, name = kind.partition(":")
             if kind == "T":
                 if not split:
                     r.t()
@@ -121,5 +127,7 @@ def _insunits(section: bytes, release: str, maintenance: int) -> int:
             elif kind == "2RD":
                 r.rd2()
             else:
-                value = getattr(r, kind.lower())()
-    return value
+                found["last"] = getattr(r, kind.lower())()
+                if name:
+                    found[name] = found["last"]
+    found["done"] = True

@@ -191,10 +191,12 @@ def test_linetypes_reach_the_ifc():
     if not sample.exists():
         pytest.skip("sample not present")
     model = ifcopenshell.file.from_string(convert(sample.read_bytes())[0])
-    fonts = {font.Name: [(p.VisibleSegmentLength, p.InvisibleSegmentLength) for p in font.PatternList] for font in model.by_type("IfcCurveStyleFont")}
-    # AutoCAD's standard centre line: long dash, gap, short dash, gap
-    assert fonts["CENTER"] == [(1.25, 0.25), (0.25, 0.25)]
-    assert fonts["HIDDEN"] == [(0.25, 0.125)]
+    fonts = {(font.Name, tuple((p.VisibleSegmentLength, p.InvisibleSegmentLength) for p in font.PatternList)) for font in model.by_type("IfcCurveStyleFont")}
+    # AutoCAD's standard centre line (long dash, gap, short dash, gap), at this drawing's linetype scale of 4
+    assert entities.load(sample.read_bytes()).ltscale == 4.0
+    assert ("CENTER", ((5.0, 1.0), (1.0, 1.0))) in fonts and ("HIDDEN", ((1.0, 0.5),)) in fonts
+    # three entities carry their own scale of 0.75 on top of that
+    assert ("HIDDEN", ((0.75, 0.375),)) in fonts
     assert any(style.CurveFont for style in model.by_type("IfcCurveStyle"))
 
 

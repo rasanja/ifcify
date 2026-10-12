@@ -417,3 +417,28 @@ def test_underlay_clip_outline_is_placed_scaled_and_turned():
     e = entities._underlay(Object, entities.dwg.Bits(data))
     # the rectangle 0,0 to 2,1, three times as large, turned so that the page's x runs up the drawing's y
     assert [tuple(round(c, 9) for c in p) for p in e["points"]] == [(10.0, 0.0), (10.0, 6.0), (7.0, 6.0), (7.0, 0.0)]
+
+
+@pytest.mark.parametrize("path", RELEASES, ids=lambda p: p.stem)
+def test_text_is_hung_where_the_drawing_says_and_hatches_keep_their_pattern(path, dxf):
+    """TEXT J MC 40,100: placed by its middle at that point. -HATCH P ANSI31 1 0: lines at 45 degrees."""
+    drawing = entities.load(path.read_bytes())
+    centred = next(e for e in drawing.entities if e.get("text") == "Centered text")
+    assert (centred["align"], centred["anchor"]) == ((1, 2), (40.0, 100.0, 0.0))
+    plain = next(e for e in drawing.entities if e.get("text") == "Hello DWG")
+    assert plain["align"] == (0, 0)
+    styled = next(e for e in drawing.entities if e.get("text") == "Styled text")
+    assert styled["stored"] == {"WidthFactor": pytest.approx(1.2), "ObliqueAngle": pytest.approx(math.radians(15))}
+    hatch = next(e for e in drawing.entities if e["type"] == "HATCH" and not e["solid"])
+    wanted = next(e for e in dxf if e[0][0] == "HATCH" and e[2][0] == "ANSI31")
+    (line,) = hatch["pattern"]
+    assert hatch["pattern_name"] == "ANSI31" and math.degrees(line["angle"]) == pytest.approx(f(wanted, 53))
+    assert near(line["offset"], (f(wanted, 45), f(wanted, 46))) and line["dashes"] == []
+
+    model = ifcopenshell.file.from_string(convert(path.read_bytes())[0])
+    placed = {t.Literal: t for t in model.by_type("IfcTextLiteralWithExtent")}
+    assert placed["Centered text"].BoxAlignment == "center" and placed["Hello DWG"].BoxAlignment == "bottom-left"
+    assert near(placed["Centered text"].Placement.Location.Coordinates, (40.0, 100.0, 0.0))
+    (drawn,) = model.by_type("IfcFillAreaStyleHatching")
+    assert drawn.HatchLineAngle == pytest.approx(math.pi / 4) and drawn.StartOfNextHatchLine.Magnitude == pytest.approx(0.125)
+    assert model.by_type("IfcFillAreaStyle") and any(s.Name == "ANSI31" for s in model.by_type("IfcFillAreaStyle"))

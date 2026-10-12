@@ -13,7 +13,7 @@ DWG releases R14, R2000, R2004, R2007, R2010, R2013 and R2018.
 |-----|-----|
 | Lines, arcs, circles, ellipses, polylines, splines, leaders | curves in an `IfcAnnotation` |
 | Text, multiline text, attributes | `IfcTextLiteralWithExtent`, with its colour, font and height as an `IfcTextStyle` |
-| Hatches, 2D solids | `IfcAnnotationFillArea` |
+| Hatches, 2D solids | `IfcAnnotationFillArea`, a patterned hatch with its lines as `IfcFillAreaStyleHatching` |
 | Blocks and their inserts, dimensions, tables | `IfcRepresentationMap` placed by `IfcMappedItem` |
 | Tolerances, multilines | text and curves |
 | Rays, construction lines | `IfcLine`, which is unbounded like they are |
@@ -31,7 +31,7 @@ DWG releases R14, R2000, R2004, R2007, R2010, R2013 and R2018.
 | Materials on solids | `IfcMaterial` |
 | Geographic location in a projected coordinate system | `IfcMapConversion` and `IfcProjectedCRS` |
 | Layers | `IfcPresentationLayerAssignment` |
-| Colours, line weights, linetypes | `IfcStyledItem` with curve, fill or surface styles |
+| Colours, line weights, linetypes at their scale | `IfcStyledItem` with curve, fill or surface styles |
 | Drawing units | IFC length unit |
 
 ## Building elements
@@ -134,6 +134,12 @@ used rather than recomputed:
   saved as R2004 or older have no history.
 - A helix's radius, number of turns and turn height.
 - Text style: the font each text is drawn with, and whether it is slanted.
+- Where text is hung from: single-line text by its alignment point and justification (left, centre, right;
+  baseline, middle, top), multiline text by its attachment point. A text's width factor and slant, which
+  IFC text cannot express, are kept as properties.
+- Linetype scale: dash and gap lengths are the pattern's, times the drawing's scale, times the entity's.
+- Hatch patterns: each family of parallel lines (direction, spacing, dashes) as an
+  `IfcFillAreaStyleHatching`. Few viewers draw these; a patterned hatch then shows as its outline.
 - Layout names, group names and descriptions, and material names.
 - The value and tag of a multi-line block attribute (R2018 files; saved to an older release, AutoCAD
   itself splits it into one plain attribute per line, tagged `NAME_001`, and that is what the file holds).
@@ -151,8 +157,7 @@ every real-world size is wrong by the same factor.
 - "By block" colour and linetype take the layer's. Palette colour 7, which AutoCAD shows white on a dark
   screen and black on paper, is written black for linework and white on solids.
 - Text: single-line text stores no size, so the box around it is estimated from the character count.
-  The font is named but the width factor and alignment are not carried over, so text may sit slightly
-  differently. Multiline text loses its inline formatting. An SHX font is named by its file (`romans.shx`).
+  Multiline text loses its inline formatting. An SHX font is named by its file (`romans.shx`).
 - Subdivision meshes are written as the cage they are smoothed from; a mesh with smoothing levels comes
   out faceted.
 - A solid with different materials on different faces lists them all; which face has which is not kept.
@@ -162,8 +167,8 @@ every real-world size is wrong by the same factor.
 **Present in the drawing but not carried over.**
 
 - The width of a polyline that tapers or changes width along its length; it comes out with no width.
-- Hatch patterns; a hatch becomes a plain fill of its boundary, and holes rely on the order of its loops.
-- Linetype scale, and shapes or text inside a linetype.
+- Hatch holes rely on the order of the hatch's loops; gradient fills become plain.
+- Shapes or text inside a linetype.
 - Arrowheads of a multileader saved without its picture, and the frame of a wipeout as a mask: it is an
   outline only and hides nothing.
 - A geographic location given as latitude and longitude (it needs a map projection); only locations in a
@@ -308,7 +313,8 @@ Path("drawing.ifc").write_text(ifc_text)
 - A drawing's declared unit is taken at its word. A drawing that says inches but was drawn in
   millimetres (one of the test drawings does) comes out 25.4 times too large.
 - IFC4X3 has no cone surface, so cone faces are written as surfaces of revolution. Viewer support for that varies.
-- Text is positioned, sized and given its font, but exact alignment and width factor are not carried over.
+- Text is positioned, aligned, sized and given its font. Its width factor is a property only, so a viewer
+  draws it at normal width.
 - Arc-length and jogged-radius dimensions are placed by the block AutoCAD drew for them. Saved without
   that block they are not redrawn, unlike the other dimension kinds.
 

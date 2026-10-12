@@ -851,12 +851,12 @@ class _Builder:
         own = e.get("linetype")
         return self.d.linetypes.get(own if isinstance(own, int) else layer.get("linetype") if own is None else None, {})
 
-    def curve_font(self, linetype):
-        """Dashes and gaps as an IfcCurveStyleFont, or None for a solid line."""
-        dashes = linetype.get("dashes") or []
+    def curve_font(self, linetype, scale=1.0):
+        """Dashes and gaps as an IfcCurveStyleFont, or None for a solid line. `scale` is the drawing's linetype
+        scale times the entity's own: the pattern is drawn that many times its defined size."""
+        dashes = [d * scale for d in linetype.get("dashes") or []]
         key = ("font", linetype.get("name"), tuple(dashes))
         if key not in self.styles:
-            # shortcut: lengths are the pattern's own, not multiplied by the drawing's or the entity's linetype scale
             pairs = [(max(d, 0.0), -gap) for d, gap in zip(dashes, dashes[1:] + dashes[:1]) if d >= 0 and gap < 0]
             pattern = [self.f.createIfcCurveStyleFontPattern(float(visible), float(invisible)) for visible, invisible in pairs]
             self.styles[key] = self.f.createIfcCurveStyleFont(linetype.get("name"), pattern) if pattern else None
@@ -870,7 +870,7 @@ class _Builder:
         width = _LINEWEIGHTS[code] / 100 * self.millimetre if code < len(_LINEWEIGHTS) and _LINEWEIGHTS[code] else None
         if e.get("width", 0) > 0:
             width = e["width"]  # a wide polyline: its drawn width, in drawing units, rather than a plotting weight
-        font = self.curve_font(self.linetype(e, layer))
+        font = self.curve_font(self.linetype(e, layer), self.d.ltscale * e.get("linetype_scale", 1.0))
         f = self.f
         for item in items:
             kind = _kind(item)
@@ -882,9 +882,23 @@ class _Builder:
             rgb = (255, 255, 255) if surface and color == 7 else _rgb(color)  # 7 on a solid: white, so it can be shaded
             curve = not surface and kind != "FillArea"
             key = ("Curve" if curve else kind, rgb, width if curve else None, font.id() if curve and font else None)
+            pattern = e.get("pattern") if kind == "FillArea" else None
+            if pattern:  # a hatch drawn with lines rather than filled: the families of lines it is drawn with
+                key = ("Hatch", rgb, tuple((line["angle"], line["origin"], line["offset"], tuple(line["dashes"])) for line in pattern))
             if key not in self.styles:
                 colour = f.createIfcColourRgb(None, *(c / 255 for c in rgb))
-                if surface:
+                if pattern:
+                    families = []
+                    for line in pattern:
+                        step = math.hypot(*line["offset"])
+                        if step <= 0:
+                            continue
+                        drawn = f.createIfcCurveStyle(None, self.curve_font({"name": None, "dashes": line["dashes"]}), None, colour, None)
+                        apart = f.createIfcVector(f.createIfcDirection(tuple(c / step for c in line["offset"])), step)
+                        start = f.createIfcCartesianPoint(tuple(map(float, line["origin"])))
+                        families.append(f.createIfcFillAreaStyleHatching(drawn, apart, None, start, float(line["angle"])))
+                    self.styles[key] = f.createIfcFillAreaStyle(e.get("pattern_name") or None, families or [colour], None)
+                elif surface:
                     self.styles[key] = f.createIfcSurfaceStyle(None, "BOTH", [f.createIfcSurfaceStyleShading(colour, None)])
                 elif kind == "FillArea":
                     self.styles[key] = f.createIfcFillAreaStyle(None, [colour], None)
@@ -1318,7 +1332,13 @@ class _Builder:
         x_axis = _to_wcs(axes, (math.cos(e["rotation"]), math.sin(e["rotation"]), 0.0))
         if e.get("multiline"):  # a multi-line attribute: written from its first line down
             return self.text(e, _plain_text(e["text"]), _to_wcs(axes, e["point"]), x_axis, "top-left")
-        return self.text(e, e["text"], _to_wcs(axes, e["point"]), x_axis, "bottom-left")
+        across, upright = e.get("align", (0, 0))
+        if (across, upright) == (0, 0) or across in (3, 5):  # plain, or stretched between two points: from its start
+            return self.text(e, e["text"], _to_wcs(axes, e["point"]), x_axis, "bottom-left")
+        # otherwise the drawing stores the point the text is hung from, and which point of the text that is
+        row = {2: "middle", 3: "top"}.get(upright, "bottom") if across != 4 else "middle"
+        column = {1: "middle", 2: "right", 4: "middle"}.get(across, "left")
+        return self.text(e, e["text"], _to_wcs(axes, e["anchor"]), x_axis, "center" if row == column else f"{row}-{column}")
 
     def _parts(self, e, parents):
         """An entity drawn from its proxy graphics: each part is built like the entity it resembles."""
@@ -1332,7 +1352,9 @@ class _Builder:
         return self.text(e, e["text"], e["point"], _unit(e["x_axis"]), "bottom-left")
 
     def _mtext(self, e, _):  # insertion point and x axis are already in world coordinates
-        return self.text(e, _plain_text(e["text"]), e["point"], _unit(e["x_axis"]), "top-left")
+        hung = ("top-left", "top-middle", "top-right", "middle-left", "center", "middle-right", "bottom-left", "bottom-middle", "bottom-right")
+        attachment = e.get("attachment", 1)  # which point of its box the text is placed by, as stored
+        return self.text(e, _plain_text(e["text"]), e["point"], _unit(e["x_axis"]), hung[attachment - 1] if 1 <= attachment <= 9 else "top-left")
 
     def _insert(self, e, parents, offset=(0.0, 0.0)):
         block = self.d.blocks.get(e["block"])

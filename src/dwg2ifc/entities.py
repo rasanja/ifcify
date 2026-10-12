@@ -13,6 +13,7 @@ class Drawing:
     def __init__(self) -> None:
         self.release = ""
         self.units = 0  # INSUNITS code; 0 means the drawing declares none
+        self.ltscale = 1.0  # LTSCALE: every linetype pattern is drawn this many times its defined size
         self.metric = False  # MEASUREMENT: fallback when the drawing declares no units
         self.layers: dict[int, dict] = {}  # handle -> {name, color, lineweight, off, frozen, locked}
         self.blocks: dict[int, dict] = {}  # block header handle -> {name, base, units}
@@ -491,7 +492,7 @@ def _entity_common(o: dwg.Obj) -> dict:
         no_links = r.b()
         color = r.bs()
     color = None if color in (None, 256) else color  # None: by layer. 0: by block
-    r.bd()  # linetype scale
+    linetype_scale = r.bd()
     if since(release, "R2000"):
         ltype, plotstyle = r.bb(), r.bb()
     if since(release, "R2007"):
@@ -502,7 +503,8 @@ def _entity_common(o: dwg.Obj) -> dict:
     invisible = r.bs() & 1
     lineweight = r.rc() if since(release, "R2000") else 29  # 29: by layer
 
-    e = {"type": o.type, "handle": o.handle, "invisible": invisible, "graphics": graphics, "color": color, "lineweight": lineweight}
+    e = {"type": o.type, "handle": o.handle, "invisible": invisible, "graphics": graphics, "color": color, "lineweight": lineweight,
+         "linetype_scale": linetype_scale or 1.0}  # fmt: skip
     if o.eed:
         e["xdata"] = [(app, xdata(raw, o.unicode)) for app, raw in o.eed]
     e["owner"] = hr.h(o.handle) if entmode == 0 else {1: "paper", 2: "model"}.get(entmode)
@@ -797,37 +799,37 @@ def _dimstyle(o: dwg.Obj) -> dict:
 
 
 def _text(o, r):
+    """Single-line text. `align` is (horizontal, vertical) as DXF numbers them, and says what `anchor` is a
+    point of: (0, 0) the left end of the baseline, (1, 2) the middle of the text, and so on."""
     if not since(o.release, "R2000"):
         elevation, point = r.bd(), r.rd2()
-        r.rd2()  # alignment point
+        anchor = r.rd2()
         extrusion = r.bd3()
         o.thickness = r.bd()
-        r.bd()  # oblique angle
-        rotation, height = r.bd(), r.bd()
-        r.bd()  # width factor
+        oblique, rotation, height, width = r.bd(), r.bd(), r.bd(), r.bd()
         text = o.text()
-        r.bs(), r.bs(), r.bs()  # generation, horizontal and vertical alignment
-        return {"point": (*point, elevation), "rotation": rotation, "height": height, "extrusion": extrusion, "text": text,
-                "style": o.handles.h(o.handle)}  # fmt: skip
-    flags = r.rc()
-    elevation = 0.0 if flags & 1 else r.rd()
-    point = r.rd2()
-    if not flags & 2:
-        r.dd(point[0]), r.dd(point[1])  # alignment point
-    extrusion = r.be()
-    _thickness(o)
-    if not flags & 4:
-        r.rd()  # oblique angle
-    rotation = 0.0 if flags & 8 else r.rd()
-    height = r.rd()
-    if not flags & 0x10:
-        r.rd()  # width factor
-    text = o.text()
-    for bit in (0x20, 0x40, 0x80):
-        if not flags & bit:
-            r.bs()  # generation, horizontal and vertical alignment
-    return {"point": (*point, elevation), "rotation": rotation, "height": height, "extrusion": extrusion, "text": text,
-            "style": o.handles.h(o.handle)}  # fmt: skip
+        r.bs()  # mirrored
+        align = (r.bs(), r.bs())
+    else:
+        flags = r.rc()
+        elevation = 0.0 if flags & 1 else r.rd()
+        point = anchor = r.rd2()
+        if not flags & 2:
+            anchor = (r.dd(point[0]), r.dd(point[1]))
+        extrusion = r.be()
+        _thickness(o)
+        oblique = 0.0 if flags & 4 else r.rd()
+        rotation = 0.0 if flags & 8 else r.rd()
+        height = r.rd()
+        width = 1.0 if flags & 0x10 else r.rd()
+        text = o.text()
+        mirrored, across, upright = (0 if flags & bit else r.bs() for bit in (0x20, 0x40, 0x80))
+        align = (across, upright)
+    e = {"point": (*point, elevation), "rotation": rotation, "height": height, "extrusion": extrusion, "text": text,
+         "align": align, "anchor": (*anchor, elevation), "style": o.handles.h(o.handle)}  # fmt: skip
+    if width != 1.0 or oblique:
+        e["stored"] = {"WidthFactor": width, "ObliqueAngle": oblique}  # IFC text has no place for these
+    return e
 
 
 def _attrib(o, r):
@@ -905,7 +907,8 @@ def _mtext(o, r):
     if since(o.release, "R2007"):
         r.bd()  # rectangle height
     e["height"] = r.bd()
-    r.bs(), r.bs()  # attachment, drawing direction
+    e["attachment"] = r.bs()  # which point of the text box the insertion point is: 1 top left ... 9 bottom right
+    r.bs()  # drawing direction
     extent_height, extent_width = r.bd(), r.bd()
     e["extent"] = (extent_width, extent_height)  # the box AutoCAD measured around the text as drawn
     e["text"] = o.text()
@@ -1063,17 +1066,18 @@ def _hatch(o, r):
             r.bd(), r.bs(), r.bl(), r.rc()  # gradient colour
         o.text()  # gradient name
     e = {"elevation": r.bd(), "extrusion": r.bd3()}
-    o.text()  # pattern name
+    e["pattern_name"] = o.text()
     e["solid"] = bool(r.b())
     r.b()  # associative
     e["paths"] = [_hatch_path(r, release) for _ in range(r.bl())]
     r.bs(), r.bs()  # style, pattern type
     if not e["solid"]:
-        r.bd(), r.bd(), r.b()  # angle, scale, double
-        for _ in range(r.bs()):  # pattern definition lines
-            r.bd(), r.bd(), r.bd(), r.bd(), r.bd()
-            for _ in range(r.bs()):
-                r.bd()  # dash length
+        r.bd(), r.bd(), r.b()  # angle, scale, double: already worked into the lines below
+        e["pattern"] = []  # families of parallel lines: direction, a point on one, the step to the next, dashes
+        for _ in range(r.bs()):
+            line = {"angle": r.bd(), "origin": (r.bd(), r.bd()), "offset": (r.bd(), r.bd())}
+            line["dashes"] = [r.bd() for _ in range(r.bs())]
+            e["pattern"].append(line)
     if any(p["flags"] & 4 for p in e["paths"]):
         r.bd()  # pixel size
     for _ in range(r.bl()):
@@ -1401,7 +1405,8 @@ def load(data: bytes) -> Drawing:
     names = dwg.classes(secs["AcDb:Classes"], release, data[0x0B])
     objects = secs["AcDb:AcDbObjects"]
     drawing.metric = secs.get("AcDb:Template", b"")[-2:] == b"\x01\x00"
-    drawing.units = header.insunits(secs.get("AcDb:Header", b""), release, data[0x0B])
+    variables = header.variables(secs.get("AcDb:Header", b""), release, data[0x0B])
+    drawing.units, drawing.ltscale = variables["insunits"], variables["ltscale"]
     for loc in dwg.object_map(secs["AcDb:Handles"]).values():
         kind = "object"
         try:  # one damaged object must not lose the rest of the drawing
