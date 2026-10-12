@@ -89,3 +89,17 @@ def test_a_rounded_rim_is_the_band_between_its_circles():
     built, _ = accuracy.built(ifc.build(one, "rim")[0])
     exact = math.pi * (major + minor) ** 2 + math.pi * major**2 + 2 * math.pi * minor * (major * math.pi / 2 + minor)
     assert built[solid["handle"]]["area"] == pytest.approx(exact, rel=2e-3)
+
+
+def test_an_edge_takes_only_its_own_stretch_of_a_shared_curve():
+    """Two edges can each use half of one closed curve; the drawing stores which half, as a parameter range."""
+    import pytest
+
+    from dwg2ifc import acis
+
+    whole = ("bspline", 3, [0.0, 1.0], [3, 3], [(0.0, 0.0), (0.0, 8.0), (8.0, 8.0), (8.0, 0.0)])
+    _, _, knots, counts, poles = acis._piece(whole, 0.25, 0.75)
+    assert (knots, counts) == ([0.25, 0.75], [3, 3])
+    assert poles[0] == pytest.approx((1.25, 4.5)) and poles[-1] == pytest.approx((6.75, 4.5))  # the curve's own points there
+    assert acis._piece(whole, 0.0, 1.0) == whole
+    assert acis._piece(whole, -0.25, 0.75) == whole  # runs over the join of a closed curve: left as it is

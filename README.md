@@ -356,7 +356,7 @@ Path("drawing.ifc").write_text(ifc_text)
   `units` in the request.
 - IFC4X3 has no cone surface, so cone faces are written as surfaces of revolution. Viewer support for that varies.
 - Some curved faces of solids do not come through IfcOpenShell (and so Bonsai) as AutoCAD has them. Measured
-  against AutoCAD on the two 3D test drawings, 70 of 82 solids match its surface area within 0.2 percent.
+  against AutoCAD on the two 3D test drawings, 70 of 82 solids match its surface area within 0.2 percent, and 71 within 0.3.
   The rest have a face of one of these kinds:
   - the rounded end of a pin (a torus that crosses its own axis). IFC has no torus of that kind, so it is
     written as an exact rational spline surface. IfcOpenShell ignores the weights of such a surface and

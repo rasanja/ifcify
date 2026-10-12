@@ -208,6 +208,58 @@ def _read_spline(tokens: list, i: int, surface: bool):
     return ("bspline", degree, k, m, points(sum(m) - degree + 1))
 
 
+def split(degree, knots, counts, poles, at):
+    """A B-spline cut in two at parameter `at`: ((knots, counts, poles), (knots, counts, poles)).
+
+    Knots are given and returned as ACIS writes them (end knots repeated `degree` times). The cut is made by
+    inserting the knot until the curve passes through a pole there, which changes no point of it. Poles are
+    blended as they are: give a rational curve's as (x*w, y*w, z*w, w).
+    """
+    flat = [k for k, m in zip(knots, counts) for _ in range(m)]
+    flat = [flat[0], *flat, flat[-1]]
+    poles = list(poles)
+    while flat.count(at) < degree:
+        k = max(i for i, u in enumerate(flat) if u <= at)
+        blend = lambda i: (at - flat[i]) / (flat[i + degree] - flat[i])  # noqa: E731
+        poles = [
+            poles[i] if i <= k - degree else poles[i - 1] if i > k
+            else tuple((1 - blend(i)) * p + blend(i) * q for p, q in zip(poles[i - 1], poles[i]))
+            for i in range(len(poles) + 1)
+        ]  # fmt: skip
+        flat.insert(k + 1, at)
+    k = max(i for i, u in enumerate(flat) if u <= at)
+
+    def acis(part):
+        distinct = sorted(set(part))
+        repeats = [part.count(u) for u in distinct]
+        repeats[0], repeats[-1] = repeats[0] - 1, repeats[-1] - 1
+        return distinct, repeats
+
+    return (*acis([*flat[: k + 1], at]), poles[: k - degree + 1]), (*acis([at, *flat[k - degree + 1 :]]), poles[k - degree :])
+
+
+def _piece(spline, low, high):
+    """The part of a spline curve between two of its parameters: what one edge uses of a curve it shares.
+
+    Two edges can each take half of one closed curve (the rim of a swept shape). Handed the whole curve and
+    two end points, a kernel cannot tell which half is meant.
+    """
+    _, degree, knots, counts, poles = spline
+    margin = 1e-9 * (knots[-1] - knots[0])
+    if not knots[0] - margin <= low < high <= knots[-1] + margin:
+        return spline  # shortcut: a range running over the join of a closed curve is left whole; cut it in two pieces to trim that too
+    weighted = len(poles[0]) == 4
+    if weighted:
+        poles = [(*(c * p[3] for c in p[:3]), p[3]) for p in poles]
+    if low > knots[0] + margin:
+        knots, counts, poles = split(degree, knots, counts, poles, low)[1]
+    if high < knots[-1] - margin:
+        knots, counts, poles = split(degree, knots, counts, poles, high)[0]
+    if weighted:
+        poles = [(*(c / p[3] for c in p[:3]), p[3]) for p in poles]
+    return ("bspline", degree, knots, counts, poles)
+
+
 class _File:
     def __init__(self, version: int, records: list[list]) -> None:
         self.records = records
@@ -350,6 +402,10 @@ class _File:
                     at = coedge[0]
                     continue
                 curve_reversed, geometry = self.curve(curve)
+                if self.edge_params and geometry and geometry[0] == "bspline":
+                    # the edge's own stretch of its curve; counted backwards when the edge runs against the curve
+                    low, high = float(edge[1]), float(edge[3])
+                    geometry = _piece(geometry, *((low, high) if _flag(sense) == curve_reversed else (-high, -low)))
                 out.append(
                     (int(coedge[3]), self.vertex(start), self.vertex(end), geometry, _flag(sense) == curve_reversed, not _flag(coedge[4]))
                 )

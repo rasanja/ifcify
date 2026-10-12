@@ -20,6 +20,7 @@ import ifcopenshell.guid
 
 from dwg2ifc import derive, proxy
 from dwg2ifc.classify import classify, is_plan
+from dwg2ifc.acis import split
 from dwg2ifc.entities import Drawing, bspline_points, fit_spline
 
 # DWG INSUNITS code -> (SI prefix, None) or (None, conversion unit name)
@@ -212,32 +213,11 @@ def _kind(item) -> str:
 def _halves(degree, knots, counts, poles):
     """A B-spline cut in two at a knot near its middle: ((knots, counts, poles), (knots, counts, poles)).
 
-    Knots are given and returned as ACIS writes them (end knots repeated `degree` times). The cut is made by
-    inserting the knot until the curve passes through a pole there, which changes no point of it.
+    Knots are given and returned as ACIS writes them (end knots repeated `degree` times).
     """
-    flat = [k for k, m in zip(knots, counts) for _ in range(m)]
-    flat = [flat[0], *flat, flat[-1]]
-    middle = (flat[0] + flat[-1]) / 2
-    at = min(flat[degree + 1 : -degree - 1], key=lambda k: abs(k - middle), default=middle)
-    poles = list(poles)
-    while flat.count(at) < degree:
-        k = max(i for i, u in enumerate(flat) if u <= at)
-        blend = lambda i: (at - flat[i]) / (flat[i + degree] - flat[i])  # noqa: E731
-        poles = [
-            poles[i] if i <= k - degree else poles[i - 1] if i > k
-            else tuple((1 - blend(i)) * p + blend(i) * q for p, q in zip(poles[i - 1], poles[i]))
-            for i in range(len(poles) + 1)
-        ]  # fmt: skip
-        flat.insert(k + 1, at)
-    k = max(i for i, u in enumerate(flat) if u <= at)
-
-    def acis(part):
-        distinct = sorted(set(part))
-        repeats = [part.count(u) for u in distinct]
-        repeats[0], repeats[-1] = repeats[0] - 1, repeats[-1] - 1
-        return distinct, repeats
-
-    return (*acis([*flat[: k + 1], at]), poles[: k - degree + 1]), (*acis([at, *flat[k - degree + 1 :]]), poles[k - degree :])
+    inner = [k for k, m in zip(knots, counts) for _ in range(m)][degree:-degree]
+    middle = (knots[0] + knots[-1]) / 2
+    return split(degree, knots, counts, poles, min(inner, key=lambda k: abs(k - middle), default=middle))
 
 
 def _turning(points) -> tuple:
