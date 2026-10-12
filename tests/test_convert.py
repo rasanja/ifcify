@@ -285,3 +285,41 @@ def test_an_architecture_drawing_is_in_the_unit_it_was_set_up_in():
     if other.exists():
         drawing = entities.load(other.read_bytes())
         assert drawing.units == 1 and list(drawing.aec_units.values()) == [1]
+
+
+def test_rounded_corners_survive_the_geometry_kernel():
+    """A box with rounded corners has eight patches of a sphere. IfcOpenShell does not convert
+    IfcSphericalSurface (the patches went missing, and one drawing crashed it), so they are written as
+    an arc turned about an axis. Built in a separate process: a crash must fail the test, not end it."""
+    import subprocess
+    import sys
+
+    sample = ASSETS / "visualization_-_condominium_with_skylight.dwg"
+    if not sample.exists():
+        pytest.skip("sample not present")
+    text = convert(sample.read_bytes())[0]
+    model = ifcopenshell.file.from_string(text)
+    solid = next(p for p in model.by_type("IfcBuildingElementProxy") if p.Tag == "40D")
+    faces = solid.Representation.Representations[0].Items[0].Outer.CfsFaces
+    assert not model.by_type("IfcSphericalSurface") and sum(1 for f in faces if f.FaceSurface.is_a("IfcSurfaceOfRevolution")) >= 8
+    script = (
+        "import sys, ifcopenshell, ifcopenshell.geom\n"
+        "m = ifcopenshell.file.from_string(sys.stdin.read())\n"
+        "p = next(p for p in m.by_type('IfcBuildingElementProxy') if p.Tag == '40D')\n"
+        "s = ifcopenshell.geom.settings(); s.set('use-world-coords', True)\n"
+        "v = ifcopenshell.geom.create_shape(s, p).geometry.verts\n"
+        "print(max(v[0::3]) - min(v[0::3]))\n"
+    )
+    done = subprocess.run([sys.executable, "-c", script], input=text, capture_output=True, text=True, timeout=300)
+    assert done.returncode == 0, done.stderr[-300:]
+    # the solid's extent along x, as AutoCAD lists it: 368.6623 to 454.4151 inches
+    assert float(done.stdout) * 39.37007874 == pytest.approx(454.41510167 - 368.66230971, abs=0.01)
+
+
+def test_tubes_are_marked_as_closing_on_themselves():
+    sample = ASSETS / "visualization_-_conference_room.dwg"
+    if not sample.exists():
+        pytest.skip("sample not present")
+    model = ifcopenshell.file.from_string(convert(sample.read_bytes())[0])
+    closed = [(s.UClosed, s.VClosed) for s in model.by_type("IfcBSplineSurfaceWithKnots")]
+    assert closed.count((True, False)) + closed.count((False, True)) >= 3 and (False, False) in closed

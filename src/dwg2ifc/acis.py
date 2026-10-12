@@ -195,11 +195,13 @@ def _read_spline(tokens: list, i: int, surface: bool):
     if surface:
         degree_u, degree_v = int(tokens[i]), int(tokens[i + 1])
         count_u, count_v = int(tokens[i + 6]), int(tokens[i + 7])
+        # whether the surface closes on itself in each direction, as a tube does: "open", or 0, when it does not
+        closed = tuple(t not in ("open", 0) for t in tokens[i + 2 : i + 4])
         i += 8
         (ku, mu), (kv, mv) = knots(count_u), knots(count_v)
         nu, nv = sum(mu) - degree_u + 1, sum(mv) - degree_v + 1
         grid = points(nu * nv)  # v outer, u inner
-        return ("bspline", degree_u, degree_v, ku, mu, kv, mv, [grid[u::nu] for u in range(nu)])
+        return ("bspline", degree_u, degree_v, ku, mu, kv, mv, [grid[u::nu] for u in range(nu)], closed)
     degree, count = int(tokens[i]), int(tokens[i + 2])
     i += 3
     k, m = knots(count)
@@ -278,7 +280,7 @@ class _File:
         move = lambda p: (*self.point(p[:3]), *p[3:])  # noqa: E731
         if len(spline) == 5:
             return (*spline[:4], [move(p) for p in spline[4]])
-        return (*spline[:7], [[move(p) for p in row] for row in spline[7]])
+        return (*spline[:7], [[move(p) for p in row] for row in spline[7]], *spline[8:])
 
     def curve(self, pointer):
         """(reversed, geometry) of an edge's curve; geometry is None when unsupported."""

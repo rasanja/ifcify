@@ -1235,22 +1235,43 @@ class _Builder:
             return self.revolved(center, axis, major, ends, 1, [2, 2], [0.0, 1.0], ratio), cosine < 0
         if kind == "sphere":
             _, center, radius, u, pole = surface
-            return (self.f.createIfcSphericalSurface(self.axes(center, pole, u), abs(radius)), radius < 0) if radius else (None, False)
+            if not radius:
+                return None, False
+            reach = [tuple(p[i] - center[i] for i in range(3)) for loop in face["loops"] for _, a, b, *_ in loop for p in (a, b) if p]
+            middle = tuple(map(sum, zip(*reach))) if reach else (0.0, 0.0, 0.0)
+            if math.hypot(*middle) <= 1e-6 * abs(radius):
+                return self.f.createIfcSphericalSurface(self.axes(center, pole, u), abs(radius)), radius < 0
+            # A patch of a sphere, such as the rounded corner of a box. IfcOpenShell does not convert
+            # IfcSphericalSurface at all: the face goes missing, and on some it crashes. The same sphere is
+            # therefore written as an arc turned about an axis, which it does build. A sphere is the same
+            # whichever way its poles point, so they are turned away from the patch, and the arc covers
+            # only the band of latitudes the patch lies in, never reaching a pole.
+            middle = _unit(middle)
+            pole = _unit(_cross(middle, _Z if abs(middle[2]) < 0.9 else (1.0, 0.0, 0.0)))
+            heights = [sum(a * b for a, b in zip(_unit(v), pole)) for v in reach]
+            low, high = (math.asin(max(-1.0, min(1.0, h))) for h in (min(heights), max(heights)))
+            margin = 0.1 * (high - low) + 0.02
+            low, high = max(low - margin, -1.55), min(high + margin, 1.55)
+            circle = self.f.createIfcCircle(self.f.createIfcAxis2Placement2D(self.f.createIfcCartesianPoint((0.0, 0.0))), abs(radius))
+            return self.revolution(center, pole, tuple(-c for c in middle), self.trimmed(circle, low, high)), radius < 0
         if kind == "torus":
             _, center, axis, major, minor, u = surface
             if not minor:
                 return None, False
             if 0 < abs(minor) < major:
                 return self.f.createIfcToroidalSurface(self.axes(center, axis, u), major, abs(minor)), minor < 0
-            # IfcToroidalSurface cannot describe a torus that crosses its own axis, so revolve the tube circle
+            # IfcToroidalSurface cannot describe a torus that crosses its own axis (the rounded end of a pin, say),
+            # so the tube circle is revolved instead. IfcOpenShell does not build this face; revolving only the
+            # part of the circle on its own side of the axis, which would be tidier, makes it hang (tried 2026-10-12).
             origin = self.f.createIfcAxis2Placement2D(self.f.createIfcCartesianPoint((float(major), 0.0)))
             tube = self.trimmed(self.f.createIfcCircle(origin, abs(minor)), 0.0, 2 * math.pi)
             return self.revolution(center, axis, u, tube), minor < 0
-        _, degree_u, degree_v, ku, mu, kv, mv, grid = surface
+        _, degree_u, degree_v, ku, mu, kv, mv, grid, *closed = surface
+        closed_u, closed_v = closed[0] if closed else (False, False)
         fixed_u, fixed_v = self.nurbs_knots(ku, mu, degree_u), self.nurbs_knots(kv, mv, degree_v)
         if fixed_u is None or fixed_v is None or not grid or not grid[0]:
             return None, False
-        args = [degree_u, degree_v, [[self.point(p[:3]) for p in row] for row in grid], "UNSPECIFIED", False, False, False,
+        args = [degree_u, degree_v, [[self.point(p[:3]) for p in row] for row in grid], "UNSPECIFIED", closed_u, closed_v, False,
                 fixed_u[0], fixed_v[0], fixed_u[1], fixed_v[1], "UNSPECIFIED"]  # fmt: skip
         if len(grid[0][0]) == 4:
             return self.f.createIfcRationalBSplineSurfaceWithKnots(*args, [[float(p[3]) for p in row] for row in grid]), False

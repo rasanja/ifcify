@@ -45,8 +45,8 @@ SUB_OBJECTS = ("VERTEX", "ATTRIBUTE", "END SEQUENCE")  # listed with their owner
 def _console(drawing: Path, commands: str) -> str:
     with tempfile.TemporaryDirectory() as work:
         script = Path(work) / "run.scr"
-        # QAFLAGS 2: no "press Enter to continue"; LUPREC 8: eight decimals instead of four
-        script.write_text("FILEDIA 0\nQAFLAGS 2\nLUPREC 8\n" + commands + "QUIT Y\n")
+        # QAFLAGS 2: no "press Enter to continue"; LUNITS 2 and LUPREC 8: plain decimals, eight of them, whatever the drawing shows
+        script.write_text("FILEDIA 0\nQAFLAGS 2\nLUNITS 2\nLUPREC 8\n" + commands + "QUIT Y\n")
         subprocess.run([str(Path(__file__).parent / "acad.sh"), str(script), str(drawing.resolve())], check=False, env={"ACAD_TIMEOUT": "600", "PATH": "/usr/bin:/bin"})
         log = Path(str(script) + ".log").read_bytes().replace(b"\0", b"").replace(b"\b", b"").decode("utf-8", "replace").replace("\r", "")
         # the console's preamble names folders on this machine; none of it is needed
@@ -164,7 +164,9 @@ def decoded(drawing) -> dict:
             mine = {"length": e["radius"] * ((e["end_angle"] - e["start_angle"]) % (2 * math.pi) or 2 * math.pi)}
         elif kind in ("LWPOLYLINE", "POLYLINE_2D"):
             points = [p[:2] for p in e["points"]]
-            mine = {"length": _polyline_length(points, e["bulges"], e["closed"]), "area": derive.exact_area(points, e["bulges"])}
+            mine = {"length": _polyline_length(points, e["bulges"], e["closed"])}
+            if e["closed"]:  # for an open one AutoCAD closes it its own way, which says nothing about our reading
+                mine["area"] = derive.exact_area(points, e["bulges"])
         elif kind == "ELLIPSE":
             a = math.sqrt(sum(c * c for c in e["major"]))
             b, steps = a * e["ratio"], 20000
@@ -179,10 +181,12 @@ def decoded(drawing) -> dict:
             if control:
                 mine = {"length": _path_length(bspline_points(e["degree"], knots, control, weights, 400))}
         elif kind == "HATCH":
-            # the filled area: outer loops less the islands inside them
-            signed = [(derive.exact_area(p["points"], p["bulges"]), p["flags"] & 1) for p in e["paths"]]
-            outer = sum(a for a, external in signed if external) or sum(a for a, _ in signed[:1])
-            mine = {"area": outer - sum(a for a, external in signed[1:] if not external) if any(x for _, x in signed) else outer}
+            # the filled area: outer loops less the islands inside them. A loop around a text (flag 8) keeps the
+            # pattern off the text but does not count, as AutoCAD reckons it.
+            loops = [(derive.exact_area(p["points"], p["bulges"]), p["flags"] & 1) for p in e["paths"] if not p["flags"] & 8]
+            if loops:
+                outer = sum(a for a, external in loops if external) or loops[0][0]
+                mine = {"area": outer - sum(a for a, external in loops[1:] if not external) if any(x for _, x in loops) else outer}
         if mine:
             out[e["handle"]] = mine
     return out
@@ -193,8 +197,10 @@ def built(model) -> tuple[dict, dict]:
     box and centroid."""
     settings = ifcopenshell.geom.settings()
     settings.set("use-world-coords", True)
-    settings.set("mesher-linear-deflection", 0.002)
-    settings.set("mesher-angular-deflection", 0.02)
+    # finer than the default, for the volume figures. Not finer still: at an angular deflection of 0.02 the
+    # mesher throws points far outside some curved faces, which reads as a wrong shape when it is not one.
+    settings.set("mesher-linear-deflection", 0.0002)
+    settings.set("mesher-angular-deflection", 0.1)
     scale = ifcopenshell.util.unit.calculate_unit_scale(model)  # the kernel answers in metres
     products, volume, moment, low, high = {}, 0.0, [0.0, 0.0, 0.0], [math.inf] * 3, [-math.inf] * 3
     for product in model.by_type("IfcProduct"):
