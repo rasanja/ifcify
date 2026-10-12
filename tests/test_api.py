@@ -69,3 +69,19 @@ def test_docs_work_offline():
     assert "http://" not in page and "https://" not in page
     assert client.get("/static/swagger-ui-bundle.js").status_code == 200
     assert "/convert" in client.get("/openapi.json").json()["paths"]
+
+
+def test_parallel_requests_run_in_separate_processes():
+    """Six requests at once: all answered correctly, by a pool of worker processes rather than one after another."""
+    from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+
+    from dwg2ifc import api
+
+    fixtures = sorted((Path(__file__).parent / "fixtures").glob("entities_20*.dwg"))
+    with ThreadPoolExecutor(6) as threads:
+        answers = list(threads.map(lambda path: (path, client.post("/convert", content=path.read_bytes())), fixtures))
+    assert len(answers) == 6 and all(r.status_code == 200 for _, r in answers)
+    # each caller got its own drawing back, not a neighbour's
+    assert [r.headers["X-DWG-Version"] for _, r in answers] == ["R" + path.stem[-4:] for path, _ in answers]
+    assert isinstance(api._executor(), ProcessPoolExecutor) and api._workers() >= 1
+    assert len({process.pid for process in api._executor()._processes.values()}) >= min(2, api._workers())

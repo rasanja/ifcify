@@ -1,13 +1,41 @@
+import asyncio
+import multiprocessing
 import os
+from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query, Request, Response
-from fastapi.concurrency import run_in_threadpool
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.staticfiles import StaticFiles
 
 from dwg2ifc import convert, dwg
+
+_pool: ProcessPoolExecutor | None = None
+
+
+def _workers() -> int:
+    """How many drawings are converted at once: DWG2IFC_WORKERS, or one per processor."""
+    return int(os.environ.get("DWG2IFC_WORKERS") or 0) or os.cpu_count() or 1
+
+
+def _executor() -> ProcessPoolExecutor:
+    # Conversion is pure computation, so threads would take turns; separate processes run side by side.
+    # "spawn" starts each worker clean, whatever threads the server itself is running.
+    global _pool
+    if _pool is None:
+        _pool = ProcessPoolExecutor(_workers(), mp_context=multiprocessing.get_context("spawn"))
+    return _pool
+
+
+@asynccontextmanager
+async def _lifespan(_: FastAPI):
+    yield
+    if _pool is not None:
+        _pool.shutdown(cancel_futures=True)
+
 
 # docs_url/redoc_url off: FastAPI's defaults load their UI from a CDN, which breaks offline
 app = FastAPI(
@@ -16,6 +44,7 @@ app = FastAPI(
     version="0.1.0",
     docs_url=None,
     redoc_url=None,
+    lifespan=_lifespan,
 )
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
@@ -82,6 +111,7 @@ def _read_ref(ref: str) -> bytes:
         404: {"description": "`path` does not exist."},
         413: {"description": "The drawing is larger than DWG2IFC_MAX_MB (default 100)."},
         422: {"description": "The input is not a DWG file, is a release not supported yet, or is corrupt."},
+        500: {"description": "The conversion process died on this drawing. Other requests are not affected beyond a retry."},
     },
     openapi_extra={
         "requestBody": {
@@ -94,13 +124,21 @@ async def convert_dwg(
     request: Request,
     path: str | None = Query(None, description="DWG file to read instead of the body, relative to the server's DWG2IFC_ROOT directory."),
 ) -> Response:
-    """Send the DWG either as the raw request body or by reference with `path`."""
+    """Send the DWG either as the raw request body or by reference with `path`.
+
+    Requests are converted in parallel, one worker process each, up to the server's `DWG2IFC_WORKERS`
+    (default: one per processor). Further requests wait their turn."""
     data = _read_ref(path) if path else await _body(request)
+    global _pool
     try:
-        # off the event loop, so one large drawing does not stall other requests
-        ifc, skipped = await run_in_threadpool(convert, data, Path(path).stem if path else "drawing")
+        # in a worker process: requests are converted in parallel, up to DWG2IFC_WORKERS at a time
+        name = Path(path).stem if path else "drawing"
+        ifc, skipped = await asyncio.get_running_loop().run_in_executor(_executor(), convert, data, name)
     except ValueError as e:
         raise HTTPException(422, str(e)) from None
+    except BrokenProcessPool:
+        _pool = None  # a worker crashed outright; the next request starts a fresh set
+        raise HTTPException(500, "the conversion process died on this drawing") from None
     headers = {"X-DWG-Version": dwg.version(data), "X-DWG-Skipped": ", ".join(f"{k}={v}" for k, v in sorted(skipped.items()))}
     return Response(ifc, media_type="application/x-step", headers=headers)
 

@@ -238,6 +238,13 @@ and work offline.
 | `DWG2IFC_PORT` | `8000` | Port to listen on |
 | `DWG2IFC_ROOT` | current directory | Directory that `?path=` references are read from |
 | `DWG2IFC_MAX_MB` | `100` | Largest drawing accepted, in megabytes |
+| `DWG2IFC_WORKERS` | one per processor | How many drawings are converted at the same time |
+
+Requests are handled in parallel. Each conversion runs in its own worker process, so several drawings
+are converted side by side on separate processors; requests beyond `DWG2IFC_WORKERS` wait their turn.
+On a 10-core machine, eight copies of a 560 KB plan sent at once took 2.9 s in total, against 21.6 s
+sent one after another. Each worker holds a drawing and its model in memory, so lower the number on a
+machine with little memory.
 
 ## Use
 
@@ -272,6 +279,7 @@ Add `-D -` to `curl` to see them.
 | 404 | `path` does not exist |
 | 413 | The drawing is larger than `DWG2IFC_MAX_MB` |
 | 422 | Not a DWG file, an unsupported release, or a corrupt file |
+| 500 | The worker process died on this drawing; other requests carry on |
 
 From Python, without the web service:
 
@@ -285,7 +293,8 @@ Path("drawing.ifc").write_text(ifc_text)
 
 ## Limits
 
-- There is a size limit but no time limit on a conversion; run it on a trusted machine.
+- There is a size limit but no time limit on a conversion; run it on a trusted machine. A drawing that
+  takes very long occupies one worker until it finishes.
 - Password-protected drawings are rejected with a 422; they are out of scope.
 - DWG R13 uses the R14 code path and is untested.
 - Solids in drawings saved as R2000 or R14 lose their rounded (filleted) faces; the rest of the solid converts.
