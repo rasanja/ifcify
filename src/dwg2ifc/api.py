@@ -1,10 +1,12 @@
 import asyncio
 import multiprocessing
 import os
+import re
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Literal
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query, Request, Response
@@ -104,6 +106,7 @@ def _read_ref(ref: str) -> bytes:
             "content": {"application/x-step": {"schema": {"type": "string"}}},
             "headers": {
                 "X-DWG-Version": {"description": "Detected DWG release, e.g. R2013.", "schema": {"type": "string"}},
+                "X-DWG-Units": {"description": "The length unit used and where it came from, e.g. `millimetres (the drawing's AutoCAD Architecture setup; its INSUNITS says inches, which is not used)`.", "schema": {"type": "string"}},
                 "X-DWG-Skipped": {"description": "Entities left out of the IFC, as counts by DWG type, e.g. `HATCH=284`. Empty when nothing was skipped.", "schema": {"type": "string"}},
             },
         },
@@ -127,6 +130,7 @@ async def convert_dwg(
     door_height: float | None = Query(None, gt=0, description="Height in metres of door openings found in such walls. Without it they are not cut."),
     window_height: float | None = Query(None, gt=0, description="Height in metres of window openings found in such walls. Needs `window_sill` too."),
     window_sill: float | None = Query(None, ge=0, description="Height in metres of the window sill above the floor."),
+    units: Literal["mm", "cm", "dm", "m", "km", "in", "ft", "yd", "mi"] | None = Query(None, description="Length unit of the drawing's coordinates, for a drawing that declares none or the wrong one. Without it the drawing's own is used; the `X-DWG-Units` header says which and why."),
 ) -> Response:
     """Send the DWG either as the raw request body or by reference with `path`.
 
@@ -138,13 +142,17 @@ async def convert_dwg(
         # in a worker process: requests are converted in parallel, up to DWG2IFC_WORKERS at a time
         name = Path(path).stem if path else "drawing"
         heights = {"storey": storey_height, "door": door_height, "window": window_height, "sill": window_sill}
-        ifc, skipped = await asyncio.get_running_loop().run_in_executor(_executor(), convert, data, name, heights)
+        ifc, skipped = await asyncio.get_running_loop().run_in_executor(_executor(), convert, data, name, heights, units)
     except ValueError as e:
         raise HTTPException(422, str(e)) from None
     except BrokenProcessPool:
         _pool = None  # a worker crashed outright; the next request starts a fresh set
         raise HTTPException(500, "the conversion process died on this drawing") from None
-    headers = {"X-DWG-Version": dwg.version(data), "X-DWG-Skipped": ", ".join(f"{k}={v}" for k, v in sorted(skipped.items()))}
+    # the unit decision is in the model as the DWG_Units property set; repeat it where a caller sees it first
+    unit = re.search(r"IFCPROPERTYSINGLEVALUE\('Unit',\$,IFCTEXT\('([^']*)'\)", ifc)
+    source = re.search(r"IFCPROPERTYSINGLEVALUE\('Source',\$,IFCTEXT\('((?:[^']|'')*)'\),\$\);\s*#\d+=IFCPROPERTYSET\([^)]*'DWG_Units'", ifc)
+    headers = {"X-DWG-Version": dwg.version(data), "X-DWG-Skipped": ", ".join(f"{k}={v}" for k, v in sorted(skipped.items())),
+               "X-DWG-Units": f"{unit.group(1)} ({source.group(1).replace(chr(39) * 2, chr(39))})" if unit and source else ""}  # fmt: skip
     return Response(ifc, media_type="application/x-step", headers=headers)
 
 

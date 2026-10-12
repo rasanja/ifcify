@@ -13,6 +13,7 @@ class Drawing:
     def __init__(self) -> None:
         self.release = ""
         self.units = 0  # INSUNITS code; 0 means the drawing declares none
+        self.aec_units: dict[int, int] = {}  # at most one: the unit of an AutoCAD Architecture drawing setup, same codes
         self.ltscale = 1.0  # LTSCALE: every linetype pattern is drawn this many times its defined size
         self.metric = False  # MEASUREMENT: fallback when the drawing declares no units
         self.layers: dict[int, dict] = {}  # handle -> {name, color, lineweight, off, frozen, locked}
@@ -1260,6 +1261,35 @@ def _anchor(o: dwg.Obj) -> int:
     return o.handles.h(o.handle)
 
 
+# AutoCAD Architecture's own numbering of length units (gbXMLSchemaLookup::lengthUnitEnumToGbXmlString), as INSUNITS codes
+_AEC_UNITS = {2: 6, 20: 7, 24: 5, 25: 4, 30: 2, 31: 1, 33: 10, 44: 3}
+
+
+def _aec_setup(o: dwg.Obj) -> int:
+    """AEC_VARS_DWG_SETUP: the unit an AutoCAD Architecture drawing was set up in, as an INSUNITS code.
+
+    Its Architecture objects are sized in this unit whatever INSUNITS says, and the two can disagree.
+    """
+    _object_common(o)
+    r = o.r
+    version = _aec_version(r)
+    if not r.b() or not (version >= 0x1E and r.b()):
+        raise ValueError("drawing setup in an older layout")
+    r.bs()  # the class of the inner record
+    _aec_version(r), o.text(), _aec_version(r)
+    # shortcut: the inner record is stepped over as the ten clear bits it is in the drawings seen (versions 50
+    # and 80, both with empty lists); anything else is not guessed at
+    if r.bits(10):
+        raise ValueError("drawing setup with an inner record that is not empty")
+    _aec_version(r), _aec_version(r)  # AecDbDictRecord, AecDbVars
+    if _aec_version(r) < 0x28:
+        raise ValueError("drawing setup in an older layout")
+    r.b()
+    unit = _AEC_UNITS.get(r.bs(), 0)
+    r.p = o.end
+    return unit
+
+
 _AEC = ("AEC_WALL", "AEC_DOOR", "AEC_WINDOW", "AEC_OPENING")
 
 
@@ -1369,6 +1399,7 @@ _OBJECTS = {
     "DGNDEFINITION": ("underlays", _underlay_file),
     "GEODATA": ("geodata", _geodata),
     "AEC_ANCHOR_OPENINGBASE_TO_WALL": ("anchors", _anchor),
+    "AEC_VARS_DWG_SETUP": ("aec_units", _aec_setup),
     "ACSH_HISTORY_CLASS": ("histories", _history),
 }
 # entities with nothing to draw: block brackets, viewports, and attribute templates (the ATTRIB holds the value)

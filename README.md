@@ -148,10 +148,20 @@ used rather than recomputed:
 - The value and tag of a multi-line block attribute (R2018 files; saved to an older release, AutoCAD
   itself splits it into one plain attribute per line, tagged `NAME_001`, and that is what the file holds).
 
-**Exact only if the drawing declares its unit.** Coordinates are written in the drawing's own unit. Real
-sizes, and floor areas in square metres, depend on which unit that is. A drawing that declares none is
-taken as inches or millimetres according to its measurement setting, which is a guess; if it is wrong,
-every real-world size is wrong by the same factor.
+**Exact only if the unit is right.** Coordinates are written in the drawing's own unit. Real sizes, and
+floor areas in square metres, depend on which unit that is, and if it is wrong every real-world size is
+wrong by the same factor. The unit is taken from the first of these that the drawing has:
+
+1. the `units` parameter of the request, if you give one;
+2. the unit an AutoCAD Architecture drawing was set up in. This can differ from the next one: one test
+   drawing declares inches but was set up, and drawn, in millimetres;
+3. the unit the drawing declares (INSUNITS);
+4. the model-space block's own unit;
+5. failing all of those, the drawing's measurement setting, which says only "imperial" or "metric". That
+   is a guess between inches and millimetres.
+
+Which one was used, and why, is in the `X-DWG-Units` response header and in the `DWG_Units` property
+set on the IFC project. Check it before trusting any size.
 
 **Approximate.**
 
@@ -280,6 +290,7 @@ The response body is the IFC file (STEP text, `application/x-step`). Two headers
 | Header | Example | Meaning |
 |--------|---------|---------|
 | `X-DWG-Version` | `R2013` | DWG release of the input |
+| `X-DWG-Units` | `inches (declared by the drawing as INSUNITS)` | The length unit used, and where it came from |
 | `X-DWG-Skipped` | `LIGHT=8` | Entities left out, counted by type or reason. Empty when none were |
 
 Add `-D -` to `curl` to see them.
@@ -316,8 +327,8 @@ Path("drawing.ifc").write_text(ifc_text)
   them: viewports, views, visual styles, plot settings, sort order, the styles of tables, multileaders and
   multilines, and the links that keep dimensions and constraints attached to geometry.
 - Solids in drawings saved as R2000 or R14 lose their rounded (filleted) faces; the rest of the solid converts.
-- A drawing's declared unit is taken at its word. A drawing that says inches but was drawn in
-  millimetres (one of the test drawings does) comes out 25.4 times too large.
+- A drawing with no AutoCAD Architecture setup is taken at its declared unit. If that is wrong, pass
+  `units` in the request.
 - IFC4X3 has no cone surface, so cone faces are written as surfaces of revolution. Viewer support for that varies.
 - Text is positioned, aligned, sized and given its font. Its width factor is a property only, so a viewer
   draws it at normal width.
@@ -332,6 +343,13 @@ uv run pytest -q
 
 Tests compare decoded values with AutoCAD's own DXF export of the same drawing in every supported
 release, and validate the IFC output against the schema.
+
+`tools/accuracy.py drawing.dwg` measures a conversion against AutoCAD's own figures: it has AutoCAD
+print every object's length, area or bounding box and each solid's volume and surface area, and
+compares them with what was read from the drawing and with the IFC as a geometry kernel builds it.
+On the test drawing, lengths and areas agree to the eight decimals AutoCAD prints, and solids to
+within 0.2 percent in volume (the kernel's tessellation of curved faces). `tests/test_accuracy.py`
+holds that line from a saved copy of AutoCAD's answers.
 
 `tools/make_fixtures.sh` rebuilds the test drawings `tests/fixtures/entities_*` from the script
 `tools/entities.scr`. It is the only part that needs AutoCAD (2027, on macOS) and is not needed to run

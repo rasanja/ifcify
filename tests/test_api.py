@@ -98,3 +98,19 @@ def test_heights_come_from_the_request_or_not_at_all():
     assert len(depths) == 1 and depths.pop() == pytest.approx(2.5 / 0.0254)  # the drawing is in inches
     assert client.post("/convert", content=sample.read_bytes(), params={"storey_height": -1}).status_code == 422
     assert {"storey_height", "door_height", "window_height", "window_sill"} <= {p["name"] for p in client.get("/openapi.json").json()["paths"]["/convert"]["post"]["parameters"]}
+
+
+def test_the_unit_used_is_reported_and_can_be_overridden():
+    fixture = Path(__file__).parent / "fixtures" / "entities_2018.dwg"
+    plain = client.post("/convert", content=fixture.read_bytes())
+    assert plain.headers["X-DWG-Units"] == "millimetres (declared by the drawing as INSUNITS)"
+    forced = client.post("/convert", content=fixture.read_bytes(), params={"units": "ft"})
+    assert forced.headers["X-DWG-Units"] == "feet (given in the request; the drawing declares millimetres)"
+    assert "FOOT" in forced.text.upper() and ".MILLI." not in forced.text
+    # R14 has no INSUNITS: the unit is a guess, and says so
+    old = client.post("/convert", content=(fixture.parent / "entities_14.dwg").read_bytes())
+    assert old.headers["X-DWG-Units"].startswith(("inches (not declared; guessed", "millimetres (not declared; guessed"))
+    assert client.post("/convert", content=fixture.read_bytes(), params={"units": "furlongs"}).status_code == 422
+    model = ifcopenshell.file.from_string(plain.text)
+    told = {p.Name: p.NominalValue.wrappedValue for s in model.by_type("IfcPropertySet") if s.Name == "DWG_Units" for p in s.HasProperties}
+    assert told == {"Unit": "millimetres", "Source": "declared by the drawing as INSUNITS"}

@@ -3,6 +3,7 @@ from pathlib import Path
 
 import ifcopenshell
 import ifcopenshell.util.element
+import ifcopenshell.util.unit
 import ifcopenshell.validate
 import pytest
 
@@ -266,3 +267,21 @@ def test_architecture_objects_become_elements_with_their_stored_sizes():
         assert -1e-6 <= z and z + cut.Depth <= host.Depth + 1e-6
     door = next(p for p in model.by_type("IfcDoor"))
     assert (door.OverallWidth, door.OverallHeight) in {(900.0, 2500.0), (800.0, 2500.0), (1200.0, 2500.0)}
+
+
+def test_an_architecture_drawing_is_in_the_unit_it_was_set_up_in():
+    """The house plan declares inches (INSUNITS) but was set up, and drawn, in millimetres."""
+    sample = ASSETS / "THREE BEDROOM HOUSE PLAN.dwg"
+    if not sample.exists():
+        pytest.skip("sample not present")
+    drawing = entities.load(sample.read_bytes())
+    assert drawing.units == 1 and list(drawing.aec_units.values()) == [4]
+    model = ifcopenshell.file.from_string(convert(sample.read_bytes())[0])
+    told = {p.Name: p.NominalValue.wrappedValue for s in model.by_type("IfcPropertySet") if s.Name == "DWG_Units" for p in s.HasProperties}
+    assert told["Unit"] == "millimetres" and "INSUNITS says inches" in told["Source"]
+    assert ifcopenshell.util.unit.calculate_unit_scale(model) == pytest.approx(0.001)  # a 3200-high wall is 3.2 m
+    # where the two agree nothing is said about a clash
+    other = ASSETS / "building001-0_floor1.dwg"
+    if other.exists():
+        drawing = entities.load(other.read_bytes())
+        assert drawing.units == 1 and list(drawing.aec_units.values()) == [1]

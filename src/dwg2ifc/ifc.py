@@ -28,6 +28,9 @@ _UNITS = {1: (None, "inch"), 2: (None, "foot"), 3: (None, "mile"), 4: ("MILLI", 
 
 # metres per drawing unit, by INSUNITS code
 _METRES = {1: 0.0254, 2: 0.3048, 3: 1609.344, 4: 0.001, 5: 0.01, 6: 1.0, 7: 1000.0, 10: 0.9144, 14: 0.1}
+_UNIT_NAMES = {1: "inches", 2: "feet", 3: "miles", 4: "millimetres", 5: "centimetres", 6: "metres", 7: "kilometres", 10: "yards", 14: "decimetres"}
+# what a caller may name a unit in the request
+UNIT_CODES = {"in": 1, "ft": 2, "mi": 3, "mm": 4, "cm": 5, "m": 6, "km": 7, "yd": 10, "dm": 14}
 # Viewers hold coordinates in single precision, which is good to about a millimetre 10 km from the origin.
 _FAR = 10_000.0
 
@@ -240,9 +243,10 @@ class _Builder:
 
         project = ifcopenshell.api.root.create_entity(f, ifc_class="IfcProject", name=name)
         model_space = drawing.block_named("*Model_Space")
-        units = drawing.units or (drawing.blocks[model_space]["units"] if model_space else 0)
-        prefix, conversion = _UNITS.get(units) or (("MILLI", None) if drawing.metric else (None, "inch"))
-        metres = _METRES.get(units) or (0.001 if drawing.metric else 0.0254)
+        units, source = self.unit(model_space)
+        prefix, conversion = _UNITS[units]
+        metres = _METRES[units]
+        self.unit_note = (_UNIT_NAMES[units], source)
         self.millimetre = 0.001 / metres  # in drawing units, for line widths
         self.metres = metres
         layouts = {handle: name for name, handle in drawing.dictionaries.get(self.root.get("ACAD_LAYOUT"), {}).items()}
@@ -340,6 +344,8 @@ class _Builder:
                 self.architecture(storey, handle)
                 self.columns(storey, handle)
         self.groups()
+        # which unit the coordinates are in, and how that was decided: the one choice everything else scales by
+        self.property_set("DWG_Units", {"Unit": self.unit_note[0], "Source": self.unit_note[1]}, [project])
         made = {}
         for names, made_of in self.with_material.items():
             listed = [made.setdefault(name, f.createIfcMaterial(name, None, None)) for name in names]
@@ -438,6 +444,31 @@ class _Builder:
             if members:
                 made = f.createIfcGroup(ifcopenshell.guid.new(), None, names.get(handle, f"{handle:X}"), group["description"] or None)
                 f.createIfcRelAssignsToGroup(ifcopenshell.guid.new(), None, None, None, members, None, made)
+
+    def unit(self, model_space) -> tuple[int, str]:
+        """The drawing's length unit as an INSUNITS code, and where it comes from.
+
+        In order: the caller's; the unit an AutoCAD Architecture drawing was set up in; the declared
+        INSUNITS; the model-space block's own; and last the measurement setting, which says only
+        imperial or metric and so is a guess between inch and millimetre.
+        """
+        d = self.d
+        declared = d.units if d.units in _UNITS else 0
+        named = _UNIT_NAMES.get(declared, "none")
+        asked = UNIT_CODES.get(self.heights.get("units"))
+        setup = next((u for u in d.aec_units.values() if u in _UNITS), 0)
+        block = d.blocks[model_space]["units"] if model_space else 0
+        if asked:
+            return asked, f"given in the request; the drawing declares {named}"
+        if setup:
+            clash = "" if setup == declared or not declared else f"; its INSUNITS says {named}, which is not used"
+            return setup, f"the drawing's AutoCAD Architecture setup{clash}"
+        if declared:
+            return declared, "declared by the drawing as INSUNITS"
+        if block in _UNITS:
+            return block, "the model-space block's own units; the drawing declares none"
+        metric = "metric" if d.metric else "imperial"
+        return (4 if d.metric else 1), f"not declared; guessed from the drawing's measurement setting, which says only {metric}"
 
     def tall(self, stored: float, key: str = "storey"):
         """A height for an element read out of flat linework, and where it comes from. None when there is none:
