@@ -16,6 +16,7 @@ DWG releases R14, R2000, R2004, R2007, R2010, R2013 and R2018.
 | Hatches, 2D solids | `IfcAnnotationFillArea` |
 | Blocks and their inserts, dimensions | `IfcRepresentationMap` placed by `IfcMappedItem` |
 | Tolerances, multilines | text and curves |
+| Rays, construction lines | `IfcLine`, which is unbounded like they are |
 | 3D solids, regions, surfaces | `IfcAdvancedBrep` or a surface model, in an `IfcBuildingElementProxy` |
 | Meshes, polyface meshes, 3D faces | `IfcPolygonalFaceSet` |
 | Multileaders, wipeouts and custom entities | drawn from the picture of themselves they carry, when they have one |
@@ -91,9 +92,10 @@ colours given as a palette number are looked up in AutoCAD's own colour table.
 used rather than recomputed:
 
 - Field values. A drawing can keep a computed property next to an object, most often the area of a room
-  outline (`405 SF`). It is written as `StoredArea` on the room, as the text AutoCAD stored. The floor area
-  quantity is still measured from the outline, because the stored text is rounded; on the sample plan the
-  two agree for every room.
+  outline. Both forms AutoCAD stores are read: the text it displays (`405 SF`, written as `StoredArea`)
+  and the unrounded number behind it, which becomes the room's floor area. Rooms without a stored area
+  are measured from their outline, and `AreaSource` says which it was. On the sample plan the stored and
+  measured areas agree to 0.01 percent.
 - The measured size of multiline text.
 - The width of a wide polyline, when it is the same along its length.
 - The thickness (extrusion height) of a 2D entity, kept as a property. It is not yet used as a height.
@@ -143,8 +145,7 @@ Entities on layers that are switched off or frozen, and entities marked invisibl
 AutoCAD hides them. Room outlines are the exception: they are read from hidden layers too, because
 offices often keep them there.
 
-Not converted: rays and construction lines, lights, custom entities that carry no picture of themselves,
-and paper-space layouts of drawings that also have a model. Every entity left out, for any of these
+Not converted: lights, custom entities that carry no picture of themselves, and paper-space layouts of drawings that also have a model. Every entity left out, for any of these
 reasons, is counted by reason in the `X-DWG-Skipped` response header. The properties listed above as not
 carried over are dropped without a count.
 

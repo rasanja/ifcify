@@ -728,6 +728,15 @@ class _Builder:
     def _line(self, e, _):
         return self.polyline([e["start"], e["end"]])
 
+    def _ray(self, e, _):
+        """A construction line, which has no end. IFC's IfcLine is likewise unbounded; a ray is written the same
+        way, from its start point, since IFC has no half-line."""
+        if not any(e["direction"]):
+            return None
+        return self.f.createIfcLine(self.point(e["point"]), self.f.createIfcVector(self.direction(_unit(e["direction"])), 1.0))
+
+    _xline = _ray
+
     def _leader(self, e, _):
         return self.polyline(e["points"])
 

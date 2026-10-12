@@ -25,3 +25,6 @@ AGENTS.md
 .kiro/
 .vscode/
 .idea/
+
+# local reverse-engineering workspace (decompiled reference material)
+.re/

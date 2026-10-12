@@ -171,7 +171,7 @@ def test_palette():
 def test_converts_to_ifc(path):
     text, skipped = convert(path.read_bytes())
     assert "FILE_SCHEMA(('IFC4X3_ADD2'))" in text
-    assert skipped == {"RAY": 1, "XLINE": 1, "on a layer that is off or frozen": 2}
+    assert skipped == {"on a layer that is off or frozen": 2}
     # the box and the sphere are closed solids, the region is an open sheet
     model = ifcopenshell.file.from_string(text)
     # two frustums and a cylinder, the wedge, the box; whole primitives use IFC's own solids
@@ -240,3 +240,17 @@ def test_properties_reach_the_ifc(path):
     }  # fmt: skip
     solids = [p for p in model.by_type("IfcBuildingElementProxy") if p.ObjectType == "3DSOLID"]
     assert solids and all(p.Tag and p.Name.endswith(":" + p.Tag) for p in solids)  # the DWG handle
+
+
+@pytest.mark.parametrize("path", RELEASES, ids=lambda p: p.stem)
+def test_rays_and_construction_lines(path):
+    """As drawn: RAY from 0,90 through 1,91 and XLINE through 0,95 and 1,96."""
+    drawing = entities.load(path.read_bytes())
+    found = {e["type"]: e for e in drawing.entities if e["type"] in ("RAY", "XLINE")}
+    diagonal = (2**-0.5, 2**-0.5, 0.0)
+    for kind, point in (("RAY", (0.0, 90.0, 0.0)), ("XLINE", (0.0, 95.0, 0.0))):
+        assert found[kind]["point"] == point
+        assert near(found[kind]["direction"], diagonal)
+    model = ifcopenshell.file.from_string(convert(path.read_bytes())[0])
+    lines = [p for p in model.by_type("IfcAnnotation") if p.ObjectType in ("RAY", "XLINE")]
+    assert len(lines) == 2 and all(p.Representation.Representations[0].Items[0].is_a("IfcLine") for p in lines)

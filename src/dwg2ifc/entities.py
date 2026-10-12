@@ -531,6 +531,11 @@ def _dimension(o, r):
     return e
 
 
+def _ray(o, r):
+    """RAY and XLINE: a point and a direction (AcDbImpRay and AcDbImpXline ::dwgInFields read exactly these)."""
+    return {"point": r.bd3(), "direction": r.bd3()}
+
+
 def _tolerance(o, r):
     if not since(o.release, "R2000"):
         r.bs(), r.bd(), r.bd()  # unknown, height, gap
@@ -873,6 +878,8 @@ _DECODERS = {
     "3DFACE": _face3d,
     "LEADER": _leader,
     "TOLERANCE": _tolerance,
+    "RAY": _ray,
+    "XLINE": _ray,
     "MLINE": _mline,
     "HATCH": _hatch,
 } | {
